@@ -13,7 +13,10 @@ requires-python = ">=3.10,<3.11"
 package-mode = false
 
 [tool.poetry.dependencies]
-OpenSeeFace = { git = "https://github.com/emilianavt/OpenSeeFace.git" }
+numpy = "^1.21.3"
+opencv-python = "^4.5.4"
+Pillow = "^8.4.0"
+onnxruntime = "^1.9.0"
 
 
 
