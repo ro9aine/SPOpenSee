@@ -1,0 +1,22 @@
+[project]
+name = "spopensee"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "ro9aine"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+OpenSeeFace = { git = "https://github.com/emilianavt/OpenSeeFace.git" }
+
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
