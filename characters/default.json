@@ -1,0 +1,7 @@
+{
+    "id": "default",
+    "head": {
+        "type": "local",
+        "path": "characters/parts/head.png"
+    }
+}
