@@ -1,6 +1,7 @@
 import cv2
-from OpenSeeFace.tracker import Tracker
+from openseeface.tracker import Tracker
 from SPOpenSee.analizer import Analizer
+from SPOpenSee.charactergenerator import ConsoleGenerator
 
 cap = cv2.VideoCapture(0)
 
@@ -10,6 +11,7 @@ if not cap.isOpened():
 
 tracker = Tracker(480, 640, silent=True)
 anl = Analizer()
+generator = ConsoleGenerator(anl)
 
 while True:
     ret, frame = cap.read()
@@ -21,7 +23,8 @@ while True:
 
     if len(faces) == 1:
         anl.analyze(faces[0])
-        print(anl._nose)
+        # generator.generate()
+        print(anl._get_state(faces[0]))
     if not ret:
         print("Can't receive frame")
         break
