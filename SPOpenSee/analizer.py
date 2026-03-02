@@ -1,6 +1,6 @@
 import enum
 import numpy as np
-from OpenSeeFace.tracker import FaceInfo
+from openseeface.tracker import FaceInfo
 
 
 class NoseState(enum.Enum):
@@ -9,6 +9,30 @@ class NoseState(enum.Enum):
     LEFT = 2
     RIGHT = 3
     CENTER = 4
+    UP_LEFT = 5
+    UP_RIGHT = 6
+    DOWN_LEFT = 7
+    DOWN_RIGHT = 8
+
+    def __add__(self, other):
+        if self == NoseState.UP and other == NoseState.LEFT:
+            return NoseState.UP_LEFT
+        elif self == NoseState.UP and other == NoseState.RIGHT:
+            return NoseState.UP_RIGHT
+        elif self == NoseState.DOWN and other == NoseState.LEFT:
+            return NoseState.DOWN_LEFT
+        elif self == NoseState.DOWN and other == NoseState.RIGHT:
+            return NoseState.DOWN_RIGHT
+        elif self == NoseState.LEFT and other == NoseState.UP:
+            return NoseState.UP_LEFT
+        elif self == NoseState.LEFT and other == NoseState.DOWN:
+            return NoseState.DOWN_LEFT
+        elif self == NoseState.RIGHT and other == NoseState.UP:
+            return NoseState.UP_RIGHT
+        elif self == NoseState.RIGHT and other == NoseState.DOWN:
+            return NoseState.DOWN_RIGHT
+        else:
+            return self
 
 
 class Analizer:
@@ -18,93 +42,46 @@ class Analizer:
     def analyze(self, face: FaceInfo):
         self._nose = self._get_nose_state(face)
 
-    def _get_state(self, face: FaceInfo):
-        lms = face.lms
-
-        # Convert to numpy array for easier math
-        pts = np.array([[p[1], p[0]] for p in lms])
-        # now pts[i] = [x, y]
-
-        # ---- Key landmark indices (for 68-point model) ----
-        NOSE_TIP = 30
-        LEFT_FACE = 0
-        RIGHT_FACE = 16
-        LEFT_EYE = 36
-        RIGHT_EYE = 45
-        MOUTH_TOP = 62
-        MOUTH_BOTTOM = 66
-
-        # ---- Important points ----
-        nose = pts[NOSE_TIP]
-        left_face = pts[LEFT_FACE]
-        right_face = pts[RIGHT_FACE]
-
-        left_eye = pts[LEFT_EYE]
-        right_eye = pts[RIGHT_EYE]
-
-        mouth_top = pts[MOUTH_TOP]
-        mouth_bottom = pts[MOUTH_BOTTOM]
-
-        # ---- Face dimensions ----
-        face_width = np.linalg.norm(right_face - left_face)
-        eye_center = (left_eye + right_eye) / 2
-        mouth_center = (mouth_top + mouth_bottom) / 2
-        vertical_center = (eye_center + mouth_center) / 2
-        horizontal_center = (left_face + right_face) / 2
-
-        # ---- Horizontal ratio ----
-        horizontal_offset = (nose[0] - horizontal_center[0]) / face_width
-
-        # ---- Vertical ratio ----
-        face_height = np.linalg.norm(mouth_center - eye_center)
-        vertical_offset = (nose[1] - vertical_center[1]) / face_height
-
-        # ---- Thresholds ----
-        H_THRESH = 0.08
-        V_THRESH = 0.15
-
-        # Determine horizontal state
-        if horizontal_offset > H_THRESH:
-            horizontal = "right"
-        elif horizontal_offset < -H_THRESH:
-            horizontal = "left"
-        else:
-            horizontal = "center"
-
-        # Determine vertical state
-        if vertical_offset > V_THRESH:
-            vertical = "bottom"
-        elif vertical_offset < -V_THRESH:
-            vertical = "top"
-        else:
-            vertical = "center"
-
-        # ---- Combine states ----
-        if horizontal == "center" and vertical == "center":
-            return "center"
-
-        if vertical == "center":
-            return horizontal
-
-        if horizontal == "center":
-            return vertical
-
-        return f"{vertical}-{horizontal}"
-
     def _get_nose_state(self, face: FaceInfo):
         nose_x = face.lms[30][1]
         left_x = face.lms[2][1]
         right_x = face.lms[14][1]
 
+        nose_y = face.lms[30][0]
+        left_y = face.lms[2][0]
+        right_y = face.lms[14][0]
+        face_len = right_x - left_x
+
         # Distance from nose to each side
         dist_left = nose_x - left_x
         dist_right = right_x - nose_x
 
-        if abs(dist_left - dist_right) < 60:
+        h_state = NoseState.CENTER
+        v_state = NoseState.CENTER
+
+        if abs(dist_left - dist_right) < face_len / 2:
+            if max(left_y, right_y) - nose_y > face_len / 4:
+                v_state = NoseState.UP
+            elif max(left_y, right_y) - nose_y < -(face_len / 4):
+                v_state = NoseState.DOWN
+            else:
+                v_state = NoseState.CENTER
+
+        if dist_left > face_len / 1.5 or dist_right > face_len / 1.5:
+            if dist_left > dist_right:
+                h_state = NoseState.RIGHT
+            elif dist_left < dist_right:
+                h_state = NoseState.LEFT
+            else:
+                h_state = NoseState.CENTER
+
+        if h_state == v_state:
             return NoseState.CENTER
-        elif dist_left > dist_right:
-            return NoseState.RIGHT
+        elif h_state == NoseState.CENTER:
+            return v_state
+        elif v_state == NoseState.CENTER:
+            return h_state
         else:
-            return NoseState.LEFT
+            return h_state + v_state
 
     NoseState = NoseState

@@ -23,8 +23,8 @@ while True:
 
     if len(faces) == 1:
         anl.analyze(faces[0])
-        # generator.generate()
-        print(anl._get_state(faces[0]))
+        generator.generate()
+        # print(anl._get_state(faces[0]))
     if not ret:
         print("Can't receive frame")
         break
