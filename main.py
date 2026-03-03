@@ -1,7 +1,7 @@
 import cv2
 from opensee.tracker import Tracker
-from SPOpenSee.analizer import Analizer
-from SPOpenSee.charactergenerator import ConsoleGenerator
+from spopensee.analizer import Analizer
+from spopensee.charactergenerator import ConsoleGenerator
 
 cap = cv2.VideoCapture(0)
 
@@ -37,30 +37,31 @@ while True:
     height, width, channels = frame.shape
     faces = tracker.predict(frame)
     for face in faces:
-        for (x, y, c) in face.lms:
+        for pt_num, (x, y, c) in enumerate(face.lms):
             cv2.circle(frame, (int(y), int(x)), 1, (0, 0, 255), -1)
+            frame = cv2.putText(frame, str(pt_num), (int(y), int(x)), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (255, 255, 0))
 
     if len(faces) == 1:
-        anl.analyze(faces[0])
-        if anl._nose == Analizer.NoseState.CENTER:
-            cv2.imshow("sp", getimg('./characters/parts/front.png'))
-        elif anl._nose == Analizer.NoseState.LEFT:
-            cv2.imshow("sp", getimg('./characters/parts/left.png'))
-        elif anl._nose == Analizer.NoseState.RIGHT:
-            cv2.imshow("sp", getimg(
-                './characters/parts/right.png'))
-        elif anl._nose == Analizer.NoseState.UP:
-            cv2.imshow("sp", getimg(
-                './characters/parts/top.png'))
-        elif anl._nose == Analizer.NoseState.DOWN:
-            cv2.imshow("sp", getimg(
-                './characters/parts/bottom.png'))
+        state = anl.find_brows_state(faces[0])
+        print(state)
+        # if anl._nose == Analizer.NoseState.CENTER:
+        #     cv2.imshow("sp", getimg('./characters/parts/front.png'))
+        # elif anl._nose == Analizer.NoseState.LEFT:
+        #     cv2.imshow("sp", getimg('./characters/parts/left.png'))
+        # elif anl._nose == Analizer.NoseState.RIGHT:
+        #     cv2.imshow("sp", getimg(
+        #         './characters/parts/right.png'))
+        # elif anl._nose == Analizer.NoseState.UP:
+        #     cv2.imshow("sp", getimg(
+        #         './characters/parts/top.png'))
+        # elif anl._nose == Analizer.NoseState.DOWN:
+        #     cv2.imshow("sp", getimg(
+        #         './characters/parts/bottom.png'))
         # generator.generate()
         # print(anl._get_state(faces[0]))
     if not ret:
         print("Can't receive frame")
         break
-
     cv2.imshow("Webcam", frame)
 
     # Press 'q' to quit
