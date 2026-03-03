@@ -1,5 +1,5 @@
 import cv2
-from openseeface.tracker import Tracker
+from opensee.tracker import Tracker
 from SPOpenSee.analizer import Analizer
 from SPOpenSee.charactergenerator import ConsoleGenerator
 
