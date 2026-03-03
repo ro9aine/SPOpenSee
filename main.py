@@ -13,6 +13,25 @@ tracker = Tracker(480, 640, silent=True)
 anl = Analizer()
 generator = ConsoleGenerator(anl)
 
+
+def getimg(path):
+    import numpy as np
+    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+
+    # разделяем каналы
+    b, g, r, a = cv2.split(img)
+
+    # создаем белый фон
+    background = np.ones_like(img[:, :, :3], dtype=np.uint8) * 255
+
+    # нормализуем альфу
+    alpha = a / 255.0
+    alpha = np.stack([alpha]*3, axis=-1)
+
+    # смешиваем
+    return (img[:, :, :3] * alpha + background * (1 - alpha)).astype(np.uint8)
+
+
 while True:
     ret, frame = cap.read()
     height, width, channels = frame.shape
@@ -23,7 +42,20 @@ while True:
 
     if len(faces) == 1:
         anl.analyze(faces[0])
-        generator.generate()
+        if anl._nose == Analizer.NoseState.CENTER:
+            cv2.imshow("sp", getimg('./characters/parts/front.png'))
+        elif anl._nose == Analizer.NoseState.LEFT:
+            cv2.imshow("sp", getimg('./characters/parts/left.png'))
+        elif anl._nose == Analizer.NoseState.RIGHT:
+            cv2.imshow("sp", getimg(
+                './characters/parts/right.png'))
+        elif anl._nose == Analizer.NoseState.UP:
+            cv2.imshow("sp", getimg(
+                './characters/parts/top.png'))
+        elif anl._nose == Analizer.NoseState.DOWN:
+            cv2.imshow("sp", getimg(
+                './characters/parts/bottom.png'))
+        # generator.generate()
         # print(anl._get_state(faces[0]))
     if not ret:
         print("Can't receive frame")
