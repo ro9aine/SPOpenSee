@@ -63,6 +63,15 @@ class BState(enum.Enum):
     DOWN = 2
 
 
+class RState(enum.Enum):
+    # Rotation state
+    NORMAL = 0
+    SLIGHTLY_LEFT = 1
+    LEFT = 2
+    SLIGHTLY_RIGHT = 3
+    RIGHT = 4
+
+
 @dataclass
 class FaceState:
     turn: FState = FState.CENTER
