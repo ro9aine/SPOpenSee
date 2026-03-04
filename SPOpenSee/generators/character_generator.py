@@ -19,6 +19,29 @@ class CharacterGenerator:
         self._eyes_white = self._load_part("white-of-the-eyes.png")
         self._pupil = self._load_part("pupil.png")
 
+        self.layout = {
+            "body_scale": 90,
+            "body_x": 0,
+            "body_y": 0,
+            "head_scale": 62,
+            "head_x": 0,
+            "head_y": 0,
+            "hair_scale": 100,
+            "hair_x": 0,
+            "hair_y": 0,
+            "eyes_scale": 55,
+            "eyes_x": 0,
+            "eyes_y": 0,
+            "pupil_scale": 4,
+            "pupil_x": 0,
+            "pupil_y": 0,
+        }
+
+    def set_layout(self, values: dict[str, int]) -> None:
+        for key, value in values.items():
+            if key in self.layout:
+                self.layout[key] = int(value)
+
     def _load_part(self, filename: str) -> np.ndarray:
         path = self._assets_dir / filename
         part = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
@@ -86,23 +109,23 @@ class CharacterGenerator:
         canvas[:, :, :3] = 245
         canvas[:, :, 3] = 255
 
-        body = self._resized(self._body, int(self.width * 0.90))
-        head = self._resized(self._head, int(self.width * 0.62))
-        hair = self._resized(self._haircut, head.shape[1])
-        eyes_white = self._resized(self._eyes_white, int(head.shape[1] * 0.55))
-        pupil = self._resized(self._pupil, max(10, int(head.shape[1] * 0.035)))
+        body = self._resized(self._body, max(40, int(self.width * self.layout["body_scale"] / 100)))
+        head = self._resized(self._head, max(40, int(self.width * self.layout["head_scale"] / 100)))
+        hair = self._resized(self._haircut, max(10, int(head.shape[1] * self.layout["hair_scale"] / 100)))
+        eyes_white = self._resized(self._eyes_white, max(10, int(head.shape[1] * self.layout["eyes_scale"] / 100)))
+        pupil = self._resized(self._pupil, max(4, int(head.shape[1] * self.layout["pupil_scale"] / 100)))
 
-        body_x = (self.width - body.shape[1]) // 2
-        body_y = self.height - body.shape[0]
+        body_x = (self.width - body.shape[1]) // 2 + self.layout["body_x"]
+        body_y = self.height - body.shape[0] + self.layout["body_y"]
         self._overlay_rgba(canvas, body, body_x, body_y)
 
         head_layer = np.zeros_like(canvas)
-        head_x = (self.width - head.shape[1]) // 2
-        head_y = int(self.height * 0.12)
+        head_x = (self.width - head.shape[1]) // 2 + self.layout["head_x"]
+        head_y = int(self.height * 0.12) + self.layout["head_y"]
         self._overlay_rgba(head_layer, head, head_x, head_y)
 
-        eyes_x = head_x + int(head.shape[1] * 0.23)
-        eyes_y = head_y + int(head.shape[0] * 0.38)
+        eyes_x = head_x + int(head.shape[1] * 0.23) + self.layout["eyes_x"]
+        eyes_y = head_y + int(head.shape[0] * 0.38) + self.layout["eyes_y"]
         self._overlay_rgba(head_layer, eyes_white, eyes_x, eyes_y)
 
         turn_dx, turn_dy = self._turn_offset(state.turn, step_x=8, step_y=6)
@@ -116,18 +139,18 @@ class CharacterGenerator:
         self._overlay_rgba(
             head_layer,
             pupil,
-            left_eye_cx - pupil_w // 2 + turn_dx // 3,
-            eye_cy - pupil_h // 2 + turn_dy // 3,
+            left_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
+            eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
         )
         self._overlay_rgba(
             head_layer,
             pupil,
-            right_eye_cx - pupil_w // 2 + turn_dx // 3,
-            eye_cy - pupil_h // 2 + turn_dy // 3,
+            right_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
+            eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
         )
 
-        hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2
-        hair_y = head_y - int(head.shape[0] * 0.06)
+        hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + self.layout["hair_x"]
+        hair_y = head_y - int(head.shape[0] * 0.06) + self.layout["hair_y"]
         self._overlay_rgba(head_layer, hair, hair_x, hair_y)
 
         angle = self._rotation_angle(state.rotation)
