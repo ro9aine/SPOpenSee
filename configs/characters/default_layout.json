@@ -1,10 +1,10 @@
 {
-  "body_scale": 60,
+  "body_scale": 33,
   "body_x": 0,
-  "body_y": 0,
-  "head_scale": 65,
+  "body_y": -28,
+  "head_scale": 34,
   "head_x": -1,
-  "head_y": -34,
+  "head_y": -17,
   "hair_scale": 98,
   "hair_x": 8,
   "hair_y": -29,
@@ -14,7 +14,7 @@
   "pupil_scale": 4,
   "pupil_x": 0,
   "pupil_y": 0,
-  "bg_mode": 0,
+  "bg_mode": 4,
   "bg_r1": 245,
   "bg_g1": 245,
   "bg_b1": 134,
@@ -22,5 +22,9 @@
   "bg_g2": 67,
   "bg_b2": 118,
   "bg_center_x": 0,
-  "bg_center_y": 0
+  "bg_center_y": 0,
+  "bg_scale": 120,
+  "bg_x": -147,
+  "bg_y": 1,
+  "bg_image_path": "C:/Users/user/Desktop/fghjkjhgfd.png"
 }

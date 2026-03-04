@@ -20,8 +20,8 @@ SMOOTHING_WINDOW = 4
 CONTROL_WINDOW = "Layout Controls"
 WEBCAM_WINDOW = "Webcam"
 CHARACTER_WINDOW = "Character"
-CHARACTER_WIDTH = 800
-CHARACTER_HEIGHT = 800
+CHARACTER_WIDTH = 1280
+CHARACTER_HEIGHT = 720
 
 TRACKBARS = {
     "body_scale": (90, 20, 160),
@@ -39,7 +39,7 @@ TRACKBARS = {
     "pupil_scale": (4, 1, 20),
     "pupil_x": (0, -100, 100),
     "pupil_y": (0, -100, 100),
-    "bg_mode": (0, 0, 3),
+    "bg_mode": (0, 0, 4),
     "bg_r1": (245, 0, 255),
     "bg_g1": (245, 0, 255),
     "bg_b1": (245, 0, 255),
@@ -48,6 +48,9 @@ TRACKBARS = {
     "bg_b2": (220, 0, 255),
     "bg_center_x": (0, -100, 100),
     "bg_center_y": (0, -100, 100),
+    "bg_scale": (100, 30, 300),
+    "bg_x": (0, -600, 600),
+    "bg_y": (0, -600, 600),
 }
 TRACKBAR_PAGES = [
     [
@@ -77,6 +80,9 @@ TRACKBAR_PAGES = [
         "bg_b2",
         "bg_center_x",
         "bg_center_y",
+        "bg_scale",
+        "bg_x",
+        "bg_y",
     ],
 ]
 
@@ -85,6 +91,8 @@ ACTION_BUTTONS = {
     "page_next": ((110, 20), (190, 70), "Next"),
     "save": ((210, 20), (290, 70), "Save"),
     "quit": ((300, 20), (380, 70), "Quit"),
+    "pick_bg": ((20, 75), (200, 120), "Pick BG"),
+    "clear_bg": ((210, 75), (380, 120), "Clear BG"),
 }
 ACTION_EVENTS = {key: False for key in ACTION_BUTTONS}
 BG_MODE_LABELS = {
@@ -92,6 +100,7 @@ BG_MODE_LABELS = {
     1: "Vertical Gradient",
     2: "Horizontal Gradient",
     3: "Radial Gradient",
+    4: "Custom Image",
 }
 
 
@@ -109,6 +118,10 @@ def load_layout_settings(path: Path) -> dict[str, int]:
         return defaults
 
     result = defaults.copy()
+    bg_image_path = data.get("bg_image_path")
+    if isinstance(bg_image_path, str) and bg_image_path:
+        result["bg_image_path"] = bg_image_path
+
     for key, (_default, low, high) in TRACKBARS.items():
         value = data.get(key, result[key])
         try:
@@ -122,11 +135,33 @@ def load_layout_settings(path: Path) -> dict[str, int]:
 def save_layout_settings(path: Path, values: dict[str, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serializable = {key: int(values[key]) for key in TRACKBARS if key in values}
+    bg_image_path = values.get("bg_image_path")
+    if isinstance(bg_image_path, str) and bg_image_path:
+        serializable["bg_image_path"] = bg_image_path
     path.write_text(json.dumps(serializable, indent=2), encoding="utf-8")
 
 
 def _noop(_value: int) -> None:
     pass
+
+
+def choose_background_file() -> str | None:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception:
+        print("Tkinter is not available; cannot open file picker.")
+        return None
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    path = filedialog.askopenfilename(
+        title="Choose background image",
+        filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp;*.webp")],
+    )
+    root.destroy()
+    return path or None
 
 
 def _on_controls_click(event: int, x: int, y: int, _flags: int, _param) -> None:
@@ -139,13 +174,13 @@ def _on_controls_click(event: int, x: int, y: int, _flags: int, _param) -> None:
 
 
 def draw_controls_overlay(current_layout: dict[str, int]) -> np.ndarray:
-    image = np.full((95, 400, 3), 238, dtype=np.uint8)
+    image = np.full((145, 400, 3), 238, dtype=np.uint8)
     mode = int(current_layout.get("bg_mode", 0))
     mode_label = BG_MODE_LABELS.get(mode, f"Mode {mode}")
     cv2.putText(
         image,
         f"Background: {mode_label}",
-        (12, 90),
+        (12, 137),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.45,
         (60, 60, 60),
@@ -156,7 +191,7 @@ def draw_controls_overlay(current_layout: dict[str, int]) -> np.ndarray:
     cv2.putText(
         image,
         page_name,
-        (210, 90),
+        (210, 137),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.45,
         (60, 60, 60),
@@ -168,6 +203,10 @@ def draw_controls_overlay(current_layout: dict[str, int]) -> np.ndarray:
             fill = (85, 90, 220)
         elif key in ("page_prev", "page_next"):
             fill = (90, 140, 210)
+        elif key == "clear_bg":
+            fill = (170, 130, 90)
+        elif key == "pick_bg":
+            fill = (85, 155, 95)
         else:
             fill = (70, 160, 90)
         cv2.rectangle(image, (x0, y0), (x1, y1), fill, thickness=-1)
@@ -197,7 +236,7 @@ def create_layout_controls(initial_values: dict[str, int], page: int) -> dict[st
     except cv2.error:
         pass
     cv2.namedWindow(CONTROL_WINDOW, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(CONTROL_WINDOW, 560, 620)
+    cv2.resizeWindow(CONTROL_WINDOW, 560, 690)
     cv2.setMouseCallback(CONTROL_WINDOW, _on_controls_click)
 
     limits: dict[str, tuple[int, int]] = {}
@@ -294,6 +333,7 @@ current_layout = initial_layout.copy()
 current_page = 0
 control_limits = create_layout_controls(current_layout, current_page)
 char.set_layout(initial_layout)
+char.set_background_image(initial_layout.get("bg_image_path") if isinstance(initial_layout.get("bg_image_path"), str) else None)
 state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
 virtual_cam = open_virtual_camera(char.width, char.height, fps=30)
 last_character_frame = char.generate(FaceState())
@@ -336,6 +376,19 @@ while True:
         control_limits = create_layout_controls(current_layout, current_page)
     if pop_action_event("page_next"):
         current_page = (current_page + 1) % len(TRACKBAR_PAGES)
+        control_limits = create_layout_controls(current_layout, current_page)
+    if pop_action_event("pick_bg"):
+        bg_path = choose_background_file()
+        if bg_path:
+            current_layout["bg_image_path"] = bg_path
+            current_layout["bg_mode"] = 4
+            char.set_background_image(bg_path)
+            control_limits = create_layout_controls(current_layout, current_page)
+    if pop_action_event("clear_bg"):
+        current_layout.pop("bg_image_path", None)
+        if int(current_layout.get("bg_mode", 0)) == 4:
+            current_layout["bg_mode"] = 0
+        char.set_background_image(None)
         control_limits = create_layout_controls(current_layout, current_page)
     if pop_action_event("quit"):
         save_layout_settings(layout_path, current_layout)

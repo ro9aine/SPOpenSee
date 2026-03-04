@@ -19,6 +19,9 @@ class CharacterGenerator:
         self._eyes_white = self._load_part("white-of-the-eyes.png")
         self._pupil = self._load_part("pupil.png")
 
+        self._bg_image_path: str | None = None
+        self._bg_image: np.ndarray | None = None
+
         self.layout = {
             "body_scale": 90,
             "body_x": 0,
@@ -44,12 +47,31 @@ class CharacterGenerator:
             "bg_b2": 220,
             "bg_center_x": 0,
             "bg_center_y": 0,
+            "bg_scale": 100,
+            "bg_x": 0,
+            "bg_y": 0,
         }
 
     def set_layout(self, values: dict[str, int]) -> None:
         for key, value in values.items():
             if key in self.layout:
                 self.layout[key] = int(value)
+
+    def set_background_image(self, image_path: str | None) -> None:
+        if not image_path:
+            self._bg_image_path = None
+            self._bg_image = None
+            return
+
+        path = Path(image_path)
+        image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+        if image is None:
+            self._bg_image_path = None
+            self._bg_image = None
+            return
+
+        self._bg_image_path = str(path)
+        self._bg_image = image
 
     def _load_part(self, filename: str) -> np.ndarray:
         path = self._assets_dir / filename
@@ -113,6 +135,33 @@ class CharacterGenerator:
         target_h = max(1, int(h * (target_w / w)))
         return cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
+    def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
+        h, w = image.shape[:2]
+        base_scale = max(self.width / max(1, w), self.height / max(1, h))
+        scale_factor = max(0.1, float(self.layout.get("bg_scale", 100)) / 100.0)
+        scale = base_scale * scale_factor
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        canvas = np.full((self.height, self.width, 3), fill_color, dtype=np.uint8)
+        pos_x = (self.width - new_w) // 2 + int(self.layout.get("bg_x", 0))
+        pos_y = (self.height - new_h) // 2 + int(self.layout.get("bg_y", 0))
+
+        x0 = max(0, pos_x)
+        y0 = max(0, pos_y)
+        x1 = min(self.width, pos_x + new_w)
+        y1 = min(self.height, pos_y + new_h)
+        if x1 <= x0 or y1 <= y0:
+            return canvas
+
+        sx0 = x0 - pos_x
+        sy0 = y0 - pos_y
+        sx1 = sx0 + (x1 - x0)
+        sy1 = sy0 + (y1 - y0)
+        canvas[y0:y1, x0:x1] = resized[sy0:sy1, sx0:sx1]
+        return canvas
+
     def _build_background(self) -> np.ndarray:
         mode = int(self.layout.get("bg_mode", 0))
         c1 = np.array(
@@ -142,7 +191,7 @@ class CharacterGenerator:
             t = np.linspace(0.0, 1.0, self.width, dtype=np.float32)[None, :, None]
             col = c1 * (1.0 - t) + c2 * t
             bg = np.repeat(col, self.height, axis=0)
-        else:
+        elif mode == 3:
             xx, yy = np.meshgrid(np.arange(self.width), np.arange(self.height))
             cx = int(self.width * (0.5 + self.layout.get("bg_center_x", 0) / 200.0))
             cy = int(self.height * (0.5 + self.layout.get("bg_center_y", 0) / 200.0))
@@ -150,6 +199,10 @@ class CharacterGenerator:
             max_dist = max(1.0, np.sqrt(max(cx, self.width - cx) ** 2 + max(cy, self.height - cy) ** 2))
             t = np.clip(dist / max_dist, 0.0, 1.0)[:, :, None]
             bg = c1 * (1.0 - t) + c2 * t
+        elif self._bg_image is not None:
+            return self._fit_background_image(self._bg_image, c1.astype(np.uint8))
+        else:
+            bg = np.full((self.height, self.width, 3), c1, dtype=np.float32)
 
         return bg.astype(np.uint8)
 
