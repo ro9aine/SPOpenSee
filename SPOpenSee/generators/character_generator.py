@@ -43,6 +43,8 @@ class CharacterGenerator:
             "pupil_scale": 4,
             "pupil_x": 0,
             "pupil_y": 0,
+            "turn_amp_x": 14,
+            "turn_amp_y": 10,
             "closed_eyes_scale": 100,
             "closed_eyes_x": 0,
             "closed_eyes_y": 0,
@@ -350,7 +352,11 @@ class CharacterGenerator:
             brow_y_base + self._brow_shift(unified_brow_state),
         )
 
-        turn_dx, turn_dy = self._turn_offset(state.turn, step_x=8, step_y=6)
+        turn_dx, turn_dy = self._turn_offset(
+            state.turn,
+            step_x=max(0, int(self.layout["turn_amp_x"])),
+            step_y=max(0, int(self.layout["turn_amp_y"])),
+        )
 
         left_eye_cx = eyes_x + int(eyes_white.shape[1] * 0.27)
         right_eye_cx = eyes_x + int(eyes_white.shape[1] * 0.73)
@@ -366,14 +372,14 @@ class CharacterGenerator:
             self._overlay_rgba(
                 head_layer,
                 pupil,
-                left_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
-                eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
+                left_eye_cx - pupil_w // 2 + turn_dx // 2 + self.layout["pupil_x"],
+                eye_cy - pupil_h // 2 + turn_dy // 2 + self.layout["pupil_y"],
             )
             self._overlay_rgba(
                 head_layer,
                 pupil,
-                right_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
-                eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
+                right_eye_cx - pupil_w // 2 + turn_dx // 2 + self.layout["pupil_x"],
+                eye_cy - pupil_h // 2 + turn_dy // 2 + self.layout["pupil_y"],
             )
 
         if state.mouth == MState.WIDE_OPEN:
@@ -383,8 +389,8 @@ class CharacterGenerator:
         else:
             mouth = mouth_closed
 
-        mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx // 2
-        mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy * 2 // 3
+        mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx
+        mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
         self._overlay_rgba(head_layer, mouth, mouth_x, mouth_y)
 
         hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + self.layout["hair_x"]

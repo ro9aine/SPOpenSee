@@ -39,6 +39,8 @@ TRACKBARS = {
     "pupil_scale": (4, 1, 20),
     "pupil_x": (0, -100, 100),
     "pupil_y": (0, -100, 100),
+    "turn_amp_x": (14, 0, 40),
+    "turn_amp_y": (10, 0, 40),
     "closed_eyes_scale": (100, 20, 250),
     "closed_eyes_x": (0, -120, 120),
     "closed_eyes_y": (0, -120, 120),
@@ -82,6 +84,8 @@ TRACKBAR_PAGES = [
         "pupil_scale",
         "pupil_x",
         "pupil_y",
+        "turn_amp_x",
+        "turn_amp_y",
     ],
     [
         "closed_eyes_scale",
