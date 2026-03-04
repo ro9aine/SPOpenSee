@@ -1,40 +1,73 @@
 # SPOpenSee
 
-South Park face tracking.
+Webcam face-tracking avatar renderer with a South Park style character generator.
+
+## What It Does
+
+- Tracks face landmarks from webcam frames.
+- Detects:
+  - turn (`left/right/up/down/center`)
+  - eye state
+  - mouth state
+  - brow state
+  - head roll rotation
+- Renders a layered PNG character.
+- Streams the rendered frame to a virtual camera (`pyvirtualcam`, optional).
+- Provides OpenCV sliders to tune character layout in real time.
+
+## Run
+
+```powershell
+poetry install
+poetry run python main.py
+```
+
+Alternative:
+
+```powershell
+.\scripts\dev\run_main.ps1
+```
+
+## Controls UI
+
+Use `Prev` / `Next` buttons to switch control pages:
+
+1. `Page 1: Character`
+2. `Page 2: Face Features`
+3. `Page 3: Background`
+4. `Page 4: Mask`
+
+Buttons:
+
+- `Save` writes layout to `configs/characters/default_layout.json`
+- `Pick BG` selects a custom background image
+- `Clear BG` removes custom background
+- `Quit` exits (same as `Esc`)
 
 ## Project Structure
 
 ```text
 SPOpenSee/
-  main.py                        # Local dev entrypoint
+  main.py
   assets/
-    characters/
-      default/
-        parts/                   # PNG layers and parts
+    characters/default/parts/
   configs/
-    characters/
-      default.json               # Character metadata and asset paths
-  scripts/
-    dev/
-      run_main.ps1               # Dev runner
-  tests/
-  opensee/                       # Tracker/runtime dependencies
+    characters/default_layout.json
+  opensee/
   spopensee/
     analyzers/
-      face_analyzer.py           # Canonical analyzer import path
+      face_analyzer.py
     generators/
-      square_generator.py        # Canonical square generator import path
-      console_generator.py
       character_generator.py
-    analizer.py                  # Legacy module (kept for compatibility)
-    charactergenerator.py        # Legacy module (kept for compatibility)
+      square_generator.py
+      console_generator.py
+    app_controls.py      # Layout UI, trackbars, save/load settings
+    app_runtime.py       # Camera, virtual camera, state smoothing
     state.py
 ```
 
-## Conventions
+## Notes
 
-- Put runtime code in `spopensee/` subpackages.
-- Put image assets in `assets/`.
-- Put JSON configs in `configs/`.
-- Keep `main.py` minimal and focused on wiring.
-- Keep legacy modules only as compatibility shims while migrating imports.
+- `pyvirtualcam` is optional. If unavailable, app still runs without virtual camera output.
+- Character part PNGs are loaded from `assets/characters/<char_id>/parts`.
+
