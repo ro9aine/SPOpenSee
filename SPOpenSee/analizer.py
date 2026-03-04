@@ -113,30 +113,54 @@ class Analizer:
         def dist(p1, p2):
             return ((p1[1] - p2[1])**2 + (p1[0] - p2[0])**2) ** 0.5
 
-        # 66-point model: robust outer lip points
-        top_lip = lm[51]
-        bottom_lip = lm[57]
-        left_corner = lm[48]
-        right_corner = lm[54]
+        # Outer mouth points
+        top_outer = lm[51]
+        bottom_outer = lm[55]
+        left_corner = lm[58]
+        right_corner = lm[62]
 
-        vertical = dist(top_lip, bottom_lip)
+        # Inner mouth points (68-point model). Fallback to outer points if unavailable.
+        if len(lm) > 66:
+            top_inner = lm[60]
+            bottom_inner = lm[64]
+        else:
+            top_inner = top_outer
+            bottom_inner = bottom_outer
+
+        outer_vertical = dist(top_outer, bottom_outer)
+        inner_vertical = dist(top_inner, bottom_inner)
         horizontal = dist(left_corner, right_corner)
 
-        if horizontal < 5:   # safety check
+        if horizontal < 5:
             return MState.CLOSED
 
-        ratio = vertical / horizontal
+        ys = [p[0] for p in lm]
+        face_height = max(ys) - min(ys)
+        if face_height <= 1:
+            return MState.CLOSED
 
-        # --- thresholds ---
-        OPEN_THRESH = 0.17
-        WIDE_THRESH = 0.52
+        outer_ratio = outer_vertical / horizontal
+        inner_ratio = inner_vertical / horizontal
+        face_open_ratio = outer_vertical / face_height
 
-        if ratio > WIDE_THRESH:
+        # OPEN and WIDE_OPEN are intentionally separated to avoid soft-open false positives.
+        OPEN_OUTER_THRESH = 0.22
+        OPEN_INNER_THRESH = 0.075
+        WIDE_OUTER_THRESH = 0.40
+        WIDE_INNER_THRESH = 0.20
+        WIDE_FACE_THRESH = 0.10
+
+        if (
+            outer_ratio > WIDE_OUTER_THRESH
+            and inner_ratio > WIDE_INNER_THRESH
+            and face_open_ratio > WIDE_FACE_THRESH
+        ):
             return MState.WIDE_OPEN
-        elif ratio > OPEN_THRESH:
+
+        if outer_ratio > OPEN_OUTER_THRESH and inner_ratio > OPEN_INNER_THRESH:
             return MState.OPEN
-        else:
-            return MState.CLOSED
+
+        return MState.CLOSED
 
     def find_emotion_state(self, face: FaceInfo) -> EmotionState:
         ...
@@ -187,3 +211,4 @@ class Analizer:
                 return BState.MIDDLE
 
         return classify(left_ratio), classify(right_ratio)
+
