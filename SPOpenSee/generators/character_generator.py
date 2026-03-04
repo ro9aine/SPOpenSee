@@ -3,7 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ..state import FState, FaceState, RState
+from ..state import BState, EState, FState, FaceState, MState, RState
 
 
 class CharacterGenerator:
@@ -17,7 +17,12 @@ class CharacterGenerator:
         self._head = self._load_part("head.png")
         self._haircut = self._load_part("haircut.png")
         self._eyes_white = self._load_part("white-of-the-eyes.png")
+        self._closed_eyes = self._load_part("closed-eyes.png")
         self._pupil = self._load_part("pupil.png")
+        self._left_brow = self._load_part("left-brow.png")
+        self._mouth_closed = self._load_part("mouth-1.png")
+        self._mouth_open = self._load_part("mouth-2.png")
+        self._mouth_wide_open = self._load_part("mouth-3.png")
 
         self._bg_image_path: str | None = None
         self._bg_image: np.ndarray | None = None
@@ -38,6 +43,15 @@ class CharacterGenerator:
             "pupil_scale": 4,
             "pupil_x": 0,
             "pupil_y": 0,
+            "closed_eyes_scale": 100,
+            "closed_eyes_x": 0,
+            "closed_eyes_y": 0,
+            "brow_scale": 100,
+            "brow_x": 0,
+            "brow_y": 0,
+            "mouth_scale": 100,
+            "mouth_x": 0,
+            "mouth_y": 0,
             "bg_mode": 0,
             "bg_r1": 245,
             "bg_g1": 245,
@@ -158,6 +172,23 @@ class CharacterGenerator:
         target_h = max(1, int(h * (target_w / w)))
         return cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
+    @staticmethod
+    def _brow_shift(state: BState) -> int:
+        if state == BState.UP:
+            return -8
+        if state == BState.DOWN:
+            return 8
+        return 0
+
+    @staticmethod
+    def _merged_brow_state(left: BState, right: BState) -> BState:
+        # Simplified rule: both brows share a single state.
+        if left == BState.DOWN or right == BState.DOWN:
+            return BState.DOWN
+        if left == BState.UP or right == BState.UP:
+            return BState.UP
+        return BState.MIDDLE
+
     def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
         base_scale = max(self.width / max(1, w), self.height / max(1, h))
@@ -257,7 +288,36 @@ class CharacterGenerator:
         head = self._resized(self._head, max(40, int(self.width * self.layout["head_scale"] / 100)))
         hair = self._resized(self._haircut, max(10, int(head.shape[1] * self.layout["hair_scale"] / 100)))
         eyes_white = self._resized(self._eyes_white, max(10, int(head.shape[1] * self.layout["eyes_scale"] / 100)))
+        closed_eyes = self._resized(
+            self._closed_eyes,
+            max(
+                10,
+                int(
+                    eyes_white.shape[1]
+                    * (self._closed_eyes.shape[1] / self._eyes_white.shape[1])
+                    * self.layout["closed_eyes_scale"]
+                    / 100
+                ),
+            ),
+        )
         pupil = self._resized(self._pupil, max(4, int(head.shape[1] * self.layout["pupil_scale"] / 100)))
+        brow = self._resized(
+            self._left_brow,
+            max(10, int(head.shape[1] * 0.24 * self.layout["brow_scale"] / 100)),
+        )
+        right_brow = cv2.flip(brow, 1)
+        mouth_closed = self._resized(
+            self._mouth_closed,
+            max(6, int(head.shape[1] * 0.16 * self.layout["mouth_scale"] / 100)),
+        )
+        mouth_open = self._resized(
+            self._mouth_open,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_open.shape[1] / self._mouth_closed.shape[1]))),
+        )
+        mouth_wide_open = self._resized(
+            self._mouth_wide_open,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_wide_open.shape[1] / self._mouth_closed.shape[1]))),
+        )
 
         body_x = (self.width - body.shape[1]) // 2 + self.layout["body_x"]
         body_y = self.height - body.shape[0] + self.layout["body_y"]
@@ -271,7 +331,24 @@ class CharacterGenerator:
 
         eyes_x = head_x + int(head.shape[1] * 0.23) + self.layout["eyes_x"]
         eyes_y = head_y + int(head.shape[0] * 0.38) + self.layout["eyes_y"]
-        self._overlay_rgba(head_layer, eyes_white, eyes_x, eyes_y)
+        closed_eyes_x = eyes_x + (eyes_white.shape[1] - closed_eyes.shape[1]) // 2 + self.layout["closed_eyes_x"]
+        closed_eyes_y = eyes_y + (eyes_white.shape[0] - closed_eyes.shape[0]) // 2 + self.layout["closed_eyes_y"]
+        unified_brow_state = self._merged_brow_state(state.left_brow, state.right_brow)
+        brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + self.layout["brow_y"]
+        left_brow_x = eyes_x + int(eyes_white.shape[1] * 0.02) + self.layout["brow_x"]
+        right_brow_x = eyes_x + eyes_white.shape[1] - right_brow.shape[1] - int(eyes_white.shape[1] * 0.02) - self.layout["brow_x"]
+        self._overlay_rgba(
+            head_layer,
+            brow,
+            left_brow_x,
+            brow_y_base + self._brow_shift(unified_brow_state),
+        )
+        self._overlay_rgba(
+            head_layer,
+            right_brow,
+            right_brow_x,
+            brow_y_base + self._brow_shift(unified_brow_state),
+        )
 
         turn_dx, turn_dy = self._turn_offset(state.turn, step_x=8, step_y=6)
 
@@ -279,20 +356,36 @@ class CharacterGenerator:
         right_eye_cx = eyes_x + int(eyes_white.shape[1] * 0.73)
         eye_cy = eyes_y + int(eyes_white.shape[0] * 0.48)
 
-        pupil_w = pupil.shape[1]
-        pupil_h = pupil.shape[0]
-        self._overlay_rgba(
-            head_layer,
-            pupil,
-            left_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
-            eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
-        )
-        self._overlay_rgba(
-            head_layer,
-            pupil,
-            right_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
-            eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
-        )
+        if state.left_eye == EState.CLOSED or state.right_eye == EState.CLOSED:
+            self._overlay_rgba(head_layer, closed_eyes, closed_eyes_x, closed_eyes_y)
+        else:
+            self._overlay_rgba(head_layer, eyes_white, eyes_x, eyes_y)
+
+            pupil_w = pupil.shape[1]
+            pupil_h = pupil.shape[0]
+            self._overlay_rgba(
+                head_layer,
+                pupil,
+                left_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
+                eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
+            )
+            self._overlay_rgba(
+                head_layer,
+                pupil,
+                right_eye_cx - pupil_w // 2 + turn_dx // 3 + self.layout["pupil_x"],
+                eye_cy - pupil_h // 2 + turn_dy // 3 + self.layout["pupil_y"],
+            )
+
+        if state.mouth == MState.WIDE_OPEN:
+            mouth = mouth_wide_open
+        elif state.mouth == MState.OPEN:
+            mouth = mouth_open
+        else:
+            mouth = mouth_closed
+
+        mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx // 2
+        mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy * 2 // 3
+        self._overlay_rgba(head_layer, mouth, mouth_x, mouth_y)
 
         hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + self.layout["hair_x"]
         hair_y = head_y - int(head.shape[0] * 0.06) + self.layout["hair_y"]

@@ -67,8 +67,8 @@ class Analizer:
         dy = right_eye_y - left_eye_y
         roll_deg = math.degrees(math.atan2(dy, dx))
 
-        slight_thresh = 4.0
-        strong_thresh = 10.0
+        slight_thresh = 6.0
+        strong_thresh = 12.0
 
         if roll_deg >= strong_thresh:
             return RState.RIGHT

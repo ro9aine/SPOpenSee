@@ -39,6 +39,15 @@ TRACKBARS = {
     "pupil_scale": (4, 1, 20),
     "pupil_x": (0, -100, 100),
     "pupil_y": (0, -100, 100),
+    "closed_eyes_scale": (100, 20, 250),
+    "closed_eyes_x": (0, -120, 120),
+    "closed_eyes_y": (0, -120, 120),
+    "brow_scale": (100, 20, 250),
+    "brow_x": (0, -120, 120),
+    "brow_y": (0, -120, 120),
+    "mouth_scale": (100, 20, 250),
+    "mouth_x": (0, -120, 120),
+    "mouth_y": (0, -120, 120),
     "bg_mode": (0, 0, 4),
     "bg_r1": (245, 0, 255),
     "bg_g1": (245, 0, 255),
@@ -73,6 +82,17 @@ TRACKBAR_PAGES = [
         "pupil_scale",
         "pupil_x",
         "pupil_y",
+    ],
+    [
+        "closed_eyes_scale",
+        "closed_eyes_x",
+        "closed_eyes_y",
+        "brow_scale",
+        "brow_x",
+        "brow_y",
+        "mouth_scale",
+        "mouth_x",
+        "mouth_y",
     ],
     [
         "bg_mode",
@@ -114,8 +134,9 @@ BG_MODE_LABELS = {
 }
 PAGE_LABELS = {
     0: "Page 1: Character",
-    1: "Page 2: Background",
-    2: "Page 3: Mask",
+    1: "Page 2: Face Features",
+    2: "Page 3: Background",
+    3: "Page 4: Mask",
 }
 
 
