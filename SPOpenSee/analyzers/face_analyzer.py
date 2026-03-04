@@ -1,13 +1,15 @@
 import math
 from typing import NewType
+
 from opensee.tracker import FaceInfo
-from .state import FaceState, FState, EState, BState, MState, EmotionState
+
+from ..state import BState, EState, EmotionState, FState, FaceState, MState, RState
 
 
-LeftEyeState = NewType('LeftEyeState', EState)
-RightEyeState = NewType('RightEyeState', EState)
-LeftBrowState = NewType('LeftBrowState', BState)
-RightBrowState = NewType('RightBrowState', BState)
+LeftEyeState = NewType("LeftEyeState", EState)
+RightEyeState = NewType("RightEyeState", EState)
+LeftBrowState = NewType("LeftBrowState", BState)
+RightBrowState = NewType("RightBrowState", BState)
 
 
 def _dist(p1, p2):
@@ -18,12 +20,12 @@ def _eye_aspect_ratio(eye):
     """
     eye = list of 6 (x,y) points
     """
-    A = _dist(eye[1], eye[5])
-    B = _dist(eye[2], eye[4])
-    C = _dist(eye[0], eye[3])
-    if C == 0:
+    a = _dist(eye[1], eye[5])
+    b = _dist(eye[2], eye[4])
+    c = _dist(eye[0], eye[3])
+    if c == 0:
         return 0.0
-    return (A + B) / (2.0 * C)
+    return (a + b) / (2.0 * c)
 
 
 class Analizer:
@@ -41,12 +43,47 @@ class Analizer:
         left, right = self.find_brows_state(face)
         state.left_brow = left
         state.right_brow = right
+        state.rotation = self.find_rotation_state(face)
         return state
+
+    def find_rotation_state(self, face: FaceInfo) -> RState:
+        lm = face.lms
+
+        if len(lm) < 48:
+            return RState.NORMAL
+
+        left_eye_pts = [lm[i] for i in range(36, 42)]
+        right_eye_pts = [lm[i] for i in range(42, 48)]
+
+        left_eye_y = sum(p[0] for p in left_eye_pts) / len(left_eye_pts)
+        left_eye_x = sum(p[1] for p in left_eye_pts) / len(left_eye_pts)
+        right_eye_y = sum(p[0] for p in right_eye_pts) / len(right_eye_pts)
+        right_eye_x = sum(p[1] for p in right_eye_pts) / len(right_eye_pts)
+
+        dx = right_eye_x - left_eye_x
+        if abs(dx) < 1e-6:
+            return RState.NORMAL
+
+        dy = right_eye_y - left_eye_y
+        roll_deg = math.degrees(math.atan2(dy, dx))
+
+        slight_thresh = 4.0
+        strong_thresh = 10.0
+
+        if roll_deg >= strong_thresh:
+            return RState.RIGHT
+        if roll_deg >= slight_thresh:
+            return RState.SLIGHTLY_RIGHT
+        if roll_deg <= -strong_thresh:
+            return RState.LEFT
+        if roll_deg <= -slight_thresh:
+            return RState.SLIGHTLY_LEFT
+
+        return RState.NORMAL
 
     def find_turn_state(self, face: FaceInfo) -> FState:
         lm = face.lms
 
-        # compute face bounding box
         xs = [p[1] for p in lm]
         ys = [p[0] for p in lm]
 
@@ -56,12 +93,11 @@ class Analizer:
         face_center_x = (min_x + max_x) / 2
         face_center_y = (min_y + max_y) / 2
 
-        nose = lm[30]  # nose tip
+        nose = lm[30]
 
         dx = nose[1] - face_center_x
         dy = nose[0] - face_center_y
 
-        # IMPORTANT: make threshold relative to face size
         face_width = max_x - min_x
         face_height = max_y - min_y
 
@@ -83,27 +119,25 @@ class Analizer:
 
         if h_state and v_state:
             return h_state + v_state
-        elif h_state:
+        if h_state:
             return h_state
-        elif v_state:
+        if v_state:
             return v_state
-        else:
-            return FState.CENTER
+        return FState.CENTER
 
     def find_eyes_state(self, face: FaceInfo) -> tuple[LeftEyeState, RightEyeState]:
         lm = face.lms
 
-        # remember: x = p[1], y = p[0]
         left_eye_pts = [lm[i] for i in range(36, 42)]
         right_eye_pts = [lm[i] for i in range(42, 48)]
 
         left_ear = _eye_aspect_ratio(left_eye_pts)
         right_ear = _eye_aspect_ratio(right_eye_pts)
 
-        THRESH = 0.12   # tune this
+        thresh = 0.12
 
-        left_state = EState.CLOSED if left_ear < THRESH else EState.OPEN
-        right_state = EState.CLOSED if right_ear < THRESH else EState.OPEN
+        left_state = EState.CLOSED if left_ear < thresh else EState.OPEN
+        right_state = EState.CLOSED if right_ear < thresh else EState.OPEN
 
         return left_state, right_state
 
@@ -111,15 +145,13 @@ class Analizer:
         lm = face.lms
 
         def dist(p1, p2):
-            return ((p1[1] - p2[1])**2 + (p1[0] - p2[0])**2) ** 0.5
+            return ((p1[1] - p2[1]) ** 2 + (p1[0] - p2[0]) ** 2) ** 0.5
 
-        # Outer mouth points
         top_outer = lm[51]
         bottom_outer = lm[55]
         left_corner = lm[58]
         right_corner = lm[62]
 
-        # Inner mouth points (68-point model). Fallback to outer points if unavailable.
         if len(lm) > 66:
             top_inner = lm[60]
             bottom_inner = lm[64]
@@ -143,21 +175,20 @@ class Analizer:
         inner_ratio = inner_vertical / horizontal
         face_open_ratio = outer_vertical / face_height
 
-        # OPEN and WIDE_OPEN are intentionally separated to avoid soft-open false positives.
-        OPEN_OUTER_THRESH = 0.22
-        OPEN_INNER_THRESH = 0.075
-        WIDE_OUTER_THRESH = 0.40
-        WIDE_INNER_THRESH = 0.20
-        WIDE_FACE_THRESH = 0.10
+        open_outer_thresh = 0.22
+        open_inner_thresh = 0.075
+        wide_outer_thresh = 0.40
+        wide_inner_thresh = 0.20
+        wide_face_thresh = 0.10
 
         if (
-            outer_ratio > WIDE_OUTER_THRESH
-            and inner_ratio > WIDE_INNER_THRESH
-            and face_open_ratio > WIDE_FACE_THRESH
+            outer_ratio > wide_outer_thresh
+            and inner_ratio > wide_inner_thresh
+            and face_open_ratio > wide_face_thresh
         ):
             return MState.WIDE_OPEN
 
-        if outer_ratio > OPEN_OUTER_THRESH and inner_ratio > OPEN_INNER_THRESH:
+        if outer_ratio > open_outer_thresh and inner_ratio > open_inner_thresh:
             return MState.OPEN
 
         return MState.CLOSED
@@ -171,25 +202,21 @@ class Analizer:
         def avg_y(indices):
             return sum(lm[i][0] for i in indices) / len(indices)
 
-        # Correct indices
-        left_brow_indices = range(17, 22)      # 17-21
-        right_brow_indices = range(22, 27)     # 22-26
+        left_brow_indices = range(17, 22)
+        right_brow_indices = range(22, 27)
 
         left_eye_top_indices = [37, 38]
         right_eye_top_indices = [43, 44]
 
-        # Compute average Y positions
         left_brow_y = avg_y(left_brow_indices)
         right_brow_y = avg_y(right_brow_indices)
 
         left_eye_y = avg_y(left_eye_top_indices)
         right_eye_y = avg_y(right_eye_top_indices)
 
-        # Distance between eye and brow
         left_distance = left_eye_y - left_brow_y
         right_distance = right_eye_y - right_brow_y
 
-        # Normalize by face height (important!)
         ys = [p[0] for p in lm]
         face_height = max(ys) - min(ys)
         if face_height == 0:
@@ -198,17 +225,26 @@ class Analizer:
         left_ratio = left_distance / face_height
         right_ratio = right_distance / face_height
 
-        # Tune these based on your webcam
-        UP_THRESH = 0.155
-        DOWN_THRESH = 0.105
+        up_thresh = 0.155
+        down_thresh = 0.105
 
         def classify(ratio):
-            if ratio > UP_THRESH:
+            if ratio > up_thresh:
                 return BState.UP
-            elif ratio < DOWN_THRESH:
+            if ratio < down_thresh:
                 return BState.DOWN
-            else:
-                return BState.MIDDLE
+            return BState.MIDDLE
 
         return classify(left_ratio), classify(right_ratio)
 
+
+FaceAnalyzer = Analizer
+
+__all__ = [
+    "Analizer",
+    "FaceAnalyzer",
+    "LeftEyeState",
+    "RightEyeState",
+    "LeftBrowState",
+    "RightBrowState",
+]

@@ -1,8 +1,7 @@
 import cv2
 import numpy as np
 
-from .analizer import Analizer
-from .state import BState, EState, EmotionState, FState, FaceState, MState
+from ..state import BState, EState, EmotionState, FState, FaceState, MState, RState
 
 
 class SquareGenerator:
@@ -31,6 +30,16 @@ class SquareGenerator:
             FState.DOWN_RIGHT: (step_x, step_y),
         }
         return offsets.get(turn, (0, 0))
+
+    def _rotation_angle(self, rotation: RState) -> float:
+        mapping = {
+            RState.NORMAL: 0.0,
+            RState.SLIGHTLY_LEFT: 7.0,
+            RState.LEFT: 14.0,
+            RState.SLIGHTLY_RIGHT: -7.0,
+            RState.RIGHT: -14.0,
+        }
+        return mapping.get(rotation, 0.0)
 
     def _draw_eye(self, canvas: np.ndarray, center: tuple[int, int], state: EState):
         cx, cy = center
@@ -96,7 +105,6 @@ class SquareGenerator:
         cx = self.width // 2
         cy = self.height // 2
 
-        # Head: simple square frame.
         head_half_w = int(self.width * 0.33)
         head_half_h = int(self.height * 0.36)
         cv2.rectangle(
@@ -118,12 +126,24 @@ class SquareGenerator:
         self._draw_eye(canvas, left_eye, state.left_eye)
         self._draw_eye(canvas, right_eye, state.right_eye)
 
-        # Nose point shifts with face turn.
         nose_center = (cx + turn_dx, cy + turn_dy)
         cv2.circle(canvas, nose_center, 5, self.fg_color, -1)
 
         mouth_center = (cx + turn_dx // 2, cy + 55 + turn_dy * 2 // 3)
         self._draw_mouth(canvas, mouth_center, state.mouth, state.emotion)
+
+        angle = self._rotation_angle(state.rotation)
+        if abs(angle) > 1e-6:
+            center = (self.width // 2, self.height // 2)
+            matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+            canvas = cv2.warpAffine(
+                canvas,
+                matrix,
+                (self.width, self.height),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=self.bg_color,
+            )
 
         return canvas
 
@@ -136,70 +156,3 @@ class SquareGenerator:
 
         frame[y:y + h, x:x + w] = face_img
         return frame
-
-
-class CharacterGenerator:
-    def __init__(self, char_id: str = 'default'):
-        self.char_id = char_id
-
-
-class ConsoleGenerator:
-    def __init__(self, analyzer: Analizer):
-        self.analyzer = analyzer
-
-    def generate(self):
-        if self.analyzer._nose == Analizer.NoseState.CENTER:
-            print('_______')
-            print('(     )')
-            print('(  .  )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.LEFT:
-            print('_______')
-            print('(     )')
-            print('( .   )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.RIGHT:
-            print('_______')
-            print('(     )')
-            print('(   . )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.UP:
-            print('_______')
-            print('(  .  )')
-            print('(     )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.DOWN:
-            print('_______')
-            print('(     )')
-            print('(     )')
-            print('(  .  )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.UP_LEFT:
-            print('_______')
-            print('( .   )')
-            print('(     )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.UP_RIGHT:
-            print('_______')
-            print('(   . )')
-            print('(     )')
-            print('(     )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.DOWN_LEFT:
-            print('_______')
-            print('(     )')
-            print('(     )')
-            print('( .   )')
-            print('-------')
-        elif self.analyzer._nose == Analizer.NoseState.DOWN_RIGHT:
-            print('_______')
-            print('(     )')
-            print('(     )')
-            print('(   . )')
-            print('-------')
-

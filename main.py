@@ -1,9 +1,13 @@
+from collections import Counter, deque
+
 import cv2
 from opensee.tracker import Tracker
-from spopensee.analizer import Analizer
-from spopensee.charactergenerator import ConsoleGenerator
-from spopensee.charactergenerator import SquareGenerator
+from spopensee.analyzers import FaceAnalyzer
+from spopensee.generators import CharacterGenerator
 from spopensee.state import FaceState
+
+
+SMOOTHING_WINDOW = 4
 
 
 def open_camera():
@@ -25,6 +29,34 @@ def open_camera():
     return None
 
 
+def majority_with_recent_tiebreak(history: deque[FaceState], attr: str):
+    values = [getattr(state, attr) for state in history]
+    counts = Counter(values)
+    max_count = max(counts.values())
+    leaders = {value for value, count in counts.items() if count == max_count}
+
+    # If tie, prefer the latest seen value for responsiveness.
+    for state in reversed(history):
+        value = getattr(state, attr)
+        if value in leaders:
+            return value
+
+    return values[-1]
+
+
+def smooth_face_state(history: deque[FaceState]) -> FaceState:
+    smoothed = FaceState()
+    smoothed.turn = majority_with_recent_tiebreak(history, "turn")
+    smoothed.left_eye = majority_with_recent_tiebreak(history, "left_eye")
+    smoothed.right_eye = majority_with_recent_tiebreak(history, "right_eye")
+    smoothed.mouth = majority_with_recent_tiebreak(history, "mouth")
+    smoothed.emotion = majority_with_recent_tiebreak(history, "emotion")
+    smoothed.left_brow = majority_with_recent_tiebreak(history, "left_brow")
+    smoothed.right_brow = majority_with_recent_tiebreak(history, "right_brow")
+    smoothed.rotation = majority_with_recent_tiebreak(history, "rotation")
+    return smoothed
+
+
 cap = open_camera()
 
 if cap is None:
@@ -32,31 +64,9 @@ if cap is None:
     raise SystemExit(1)
 
 tracker = Tracker(480, 640, silent=True)
-anl = Analizer()
-generator = ConsoleGenerator(anl)
-
-
-def getimg(path):
-    import numpy as np
-
-    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-
-    # разделяем каналы
-    b, g, r, a = cv2.split(img)
-
-    # создаем белый фон
-    background = np.ones_like(img[:, :, :3], dtype=np.uint8) * 255
-
-    # нормализуем альфу
-    alpha = a / 255.0
-    alpha = np.stack([alpha] * 3, axis=-1)
-
-    # смешиваем
-    return (img[:, :, :3] * alpha + background * (1 - alpha)).astype(np.uint8)
-
-
-sq = SquareGenerator()
-
+anl = FaceAnalyzer()
+char = CharacterGenerator("default")
+state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
 
 while True:
     ret, frame = cap.read()
@@ -64,7 +74,6 @@ while True:
         print("Can't receive frame from camera")
         continue
 
-    height, width, channels = frame.shape
     faces = tracker.predict(frame)
     for face in faces:
         for pt_num, (x, y, c) in enumerate(face.lms):
@@ -72,11 +81,12 @@ while True:
             frame = cv2.putText(frame, str(pt_num), (int(y), int(x)), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (255, 255, 0))
 
     if len(faces) == 1:
-        face_state = anl.find_all(faces[0])
-        print(face_state.mouth)
+        current_state = anl.find_all(faces[0])
+        state_history.append(current_state)
 
-        img = sq.generate(face_state)
-        cv2.imshow("SquareFace", img)
+        smoothed_state = smooth_face_state(state_history)
+        img = char.generate(smoothed_state)
+        cv2.imshow("Character", img)
 
     cv2.imshow("Webcam", frame)
 
@@ -86,3 +96,5 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+
+

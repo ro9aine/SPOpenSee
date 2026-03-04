@@ -88,3 +88,6 @@ class FaceState:
     # Brows
     left_brow: BState = BState.MIDDLE
     right_brow: BState = BState.MIDDLE
+
+    # Rotation
+    rotation: RState = RState.NORMAL
