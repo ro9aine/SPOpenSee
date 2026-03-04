@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections import deque
 
 import cv2
 import numpy as np
@@ -23,9 +24,18 @@ class CharacterGenerator:
         self._mouth_closed = self._load_part("mouth-1.png")
         self._mouth_open = self._load_part("mouth-2.png")
         self._mouth_wide_open = self._load_part("mouth-3.png")
+        self._mouth_talk_4 = self._load_part("mouth-4.png")
+        self._mouth_talk_5 = self._load_part("mouth-5.png")
+        self._mouth_talk_6 = self._load_part("mouth-6.png")
+        self._mouth_talk_7 = self._load_part("mouth-7.png")
 
         self._bg_image_path: str | None = None
         self._bg_image: np.ndarray | None = None
+        self._rng = np.random.default_rng()
+        self._speech_energy = 0.0
+        self._speech_history: deque[float] = deque(maxlen=10)
+        self._last_talking_mouth = 2
+        self._mouth_hold_frames = 0
 
         self.layout = {
             "body_scale": 90,
@@ -279,7 +289,59 @@ class CharacterGenerator:
             mask[max(0, h - cut_bottom):, :] = 0
         return mask
 
-    def generate_with_mask(self, state: FaceState) -> tuple[np.ndarray, np.ndarray]:
+    def _select_talking_mouth(self, is_speaking: bool, speech_energy: float) -> int:
+        energy = max(0.0, min(1.0, float(speech_energy)))
+
+        if not is_speaking:
+            self._speech_energy = 0.0
+            self._speech_history.clear()
+            self._mouth_hold_frames = 0
+            self._last_talking_mouth = 2
+            return 2
+
+        self._speech_energy = self._speech_energy * 0.7 + energy * 0.3
+        self._speech_history.append(self._speech_energy)
+        anchor = 2 if self._speech_energy < 0.55 else 3
+
+        # Stable tone (e.g. repeated "a-a-a") should not shuffle mouth shapes.
+        stable_voice = False
+        if len(self._speech_history) >= 6:
+            stable_voice = max(self._speech_history) - min(self._speech_history) < 0.08
+
+        if stable_voice:
+            self._mouth_hold_frames = 2
+            self._last_talking_mouth = anchor
+            return anchor
+
+        if self._mouth_hold_frames > 0:
+            self._mouth_hold_frames -= 1
+            return self._last_talking_mouth
+
+        weighted_pool = [anchor, anchor, anchor]
+        if anchor == 2:
+            if self._speech_energy > 0.22:
+                weighted_pool.extend([4, 4])
+            if self._speech_energy > 0.34:
+                weighted_pool.append(5)
+        else:
+            weighted_pool.extend([6, 6])
+            if self._speech_energy > 0.74:
+                weighted_pool.append(7)
+            if self._speech_energy < 0.65:
+                weighted_pool.append(5)
+
+        next_mouth = int(self._rng.choice(np.array(weighted_pool)))
+        self._last_talking_mouth = next_mouth
+        # Faster changes when energy is high.
+        self._mouth_hold_frames = 1 if self._speech_energy > 0.7 else 2
+        return next_mouth
+
+    def generate_with_mask(
+        self,
+        state: FaceState,
+        is_speaking: bool = False,
+        speech_energy: float = 0.0,
+    ) -> tuple[np.ndarray, np.ndarray]:
         canvas = np.zeros((self.height, self.width, 4), dtype=np.uint8)
         background = self._build_background()
         canvas[:, :, :3] = background
@@ -319,6 +381,22 @@ class CharacterGenerator:
         mouth_wide_open = self._resized(
             self._mouth_wide_open,
             max(6, int(mouth_closed.shape[1] * (self._mouth_wide_open.shape[1] / self._mouth_closed.shape[1]))),
+        )
+        mouth_talk_4 = self._resized(
+            self._mouth_talk_4,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_talk_4.shape[1] / self._mouth_closed.shape[1]))),
+        )
+        mouth_talk_5 = self._resized(
+            self._mouth_talk_5,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_talk_5.shape[1] / self._mouth_closed.shape[1]))),
+        )
+        mouth_talk_6 = self._resized(
+            self._mouth_talk_6,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_talk_6.shape[1] / self._mouth_closed.shape[1]))),
+        )
+        mouth_talk_7 = self._resized(
+            self._mouth_talk_7,
+            max(6, int(mouth_closed.shape[1] * (self._mouth_talk_7.shape[1] / self._mouth_closed.shape[1]))),
         )
 
         body_x = (self.width - body.shape[1]) // 2 + self.layout["body_x"]
@@ -382,12 +460,22 @@ class CharacterGenerator:
                 eye_cy - pupil_h // 2 + turn_dy // 2 + self.layout["pupil_y"],
             )
 
-        if state.mouth == MState.WIDE_OPEN:
-            mouth = mouth_wide_open
-        elif state.mouth == MState.OPEN:
-            mouth = mouth_open
-        else:
+        if state.mouth == MState.CLOSED:
             mouth = mouth_closed
+        elif not is_speaking:
+            mouth = mouth_open
+            self._select_talking_mouth(False, 0.0)
+        else:
+            mouth_idx = self._select_talking_mouth(True, speech_energy)
+            mouth_map = {
+                2: mouth_open,
+                3: mouth_wide_open,
+                4: mouth_talk_4,
+                5: mouth_talk_5,
+                6: mouth_talk_6,
+                7: mouth_talk_7,
+            }
+            mouth = mouth_map.get(mouth_idx, mouth_open)
 
         mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx
         mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
@@ -418,6 +506,6 @@ class CharacterGenerator:
         out_bgr[mask > 0] = full_bgr[mask > 0]
         return out_bgr, mask
 
-    def generate(self, state: FaceState) -> np.ndarray:
-        img, _mask = self.generate_with_mask(state)
+    def generate(self, state: FaceState, is_speaking: bool = False, speech_energy: float = 0.0) -> np.ndarray:
+        img, _mask = self.generate_with_mask(state, is_speaking=is_speaking, speech_energy=speech_energy)
         return img

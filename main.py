@@ -7,6 +7,7 @@ from opensee.tracker import Tracker
 from spopensee.analyzers import FaceAnalyzer
 from spopensee.app_controls import CONTROL_WINDOW, LayoutControls
 from spopensee.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
+from spopensee.audio_input import MicSpeechInput
 from spopensee.generators import CharacterGenerator
 from spopensee.state import FaceState
 
@@ -40,6 +41,8 @@ def main() -> None:
 
     state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
     virtual_cam = open_virtual_camera(character.width, character.height, fps=30)
+    mic_input = MicSpeechInput()
+    mic_input.start()
     last_state = FaceState()
 
     while True:
@@ -68,7 +71,21 @@ def main() -> None:
             state_history.append(analyzer.find_all(faces[0]))
             last_state = smooth_face_state(state_history)
 
-        character_frame, _mask_frame = character.generate_with_mask(last_state)
+        mic_enabled = int(current_layout.get("mic_enabled", 1)) > 0
+        if mic_enabled and mic_input.running:
+            mic_threshold = max(0.01, min(1.0, int(current_layout.get("mic_threshold", 8)) / 100.0))
+            mic_gain = max(0.1, int(current_layout.get("mic_gain", 200)) / 10.0)
+            is_speaking, speech_energy = mic_input.read_state(threshold=mic_threshold, gain=mic_gain)
+            current_layout["speech_active"] = int(is_speaking)
+            current_layout["speech_energy"] = int(max(0, min(100, round(speech_energy * 100.0))))
+        else:
+            is_speaking = int(current_layout.get("speech_active", 0)) > 0
+            speech_energy = max(0.0, min(1.0, int(current_layout.get("speech_energy", 0)) / 100.0))
+        character_frame, _mask_frame = character.generate_with_mask(
+            last_state,
+            is_speaking=is_speaking,
+            speech_energy=speech_energy,
+        )
 
         cv2.imshow(WEBCAM_WINDOW, frame)
         cv2.imshow(CHARACTER_WINDOW, character_frame)
@@ -108,6 +125,7 @@ def main() -> None:
     cap.release()
     if virtual_cam is not None:
         virtual_cam.close()
+    mic_input.close()
     cv2.destroyAllWindows()
 
 

@@ -18,6 +18,7 @@ opencv-python = "^4.5.4"
 Pillow = "^8.4.0"
 onnxruntime = "1.22"
 pyvirtualcam = "^0.14.0"
+sounddevice = "^0.5.2"
 
 
 
