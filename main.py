@@ -39,13 +39,60 @@ TRACKBARS = {
     "pupil_scale": (4, 1, 20),
     "pupil_x": (0, -100, 100),
     "pupil_y": (0, -100, 100),
+    "bg_mode": (0, 0, 3),
+    "bg_r1": (245, 0, 255),
+    "bg_g1": (245, 0, 255),
+    "bg_b1": (245, 0, 255),
+    "bg_r2": (220, 0, 255),
+    "bg_g2": (220, 0, 255),
+    "bg_b2": (220, 0, 255),
+    "bg_center_x": (0, -100, 100),
+    "bg_center_y": (0, -100, 100),
 }
+TRACKBAR_PAGES = [
+    [
+        "body_scale",
+        "body_x",
+        "body_y",
+        "head_scale",
+        "head_x",
+        "head_y",
+        "hair_scale",
+        "hair_x",
+        "hair_y",
+        "eyes_scale",
+        "eyes_x",
+        "eyes_y",
+        "pupil_scale",
+        "pupil_x",
+        "pupil_y",
+    ],
+    [
+        "bg_mode",
+        "bg_r1",
+        "bg_g1",
+        "bg_b1",
+        "bg_r2",
+        "bg_g2",
+        "bg_b2",
+        "bg_center_x",
+        "bg_center_y",
+    ],
+]
 
 ACTION_BUTTONS = {
-    "save": ((20, 20), (180, 70), "Save"),
-    "quit": ((220, 20), (380, 70), "Quit"),
+    "page_prev": ((20, 20), (100, 70), "Prev"),
+    "page_next": ((110, 20), (190, 70), "Next"),
+    "save": ((210, 20), (290, 70), "Save"),
+    "quit": ((300, 20), (380, 70), "Quit"),
 }
-ACTION_EVENTS = {"save": False, "quit": False}
+ACTION_EVENTS = {key: False for key in ACTION_BUTTONS}
+BG_MODE_LABELS = {
+    0: "Solid",
+    1: "Vertical Gradient",
+    2: "Horizontal Gradient",
+    3: "Radial Gradient",
+}
 
 
 def load_layout_settings(path: Path) -> dict[str, int]:
@@ -91,16 +138,44 @@ def _on_controls_click(event: int, x: int, y: int, _flags: int, _param) -> None:
             ACTION_EVENTS[key] = True
 
 
-def draw_controls_overlay() -> np.ndarray:
+def draw_controls_overlay(current_layout: dict[str, int]) -> np.ndarray:
     image = np.full((95, 400, 3), 238, dtype=np.uint8)
+    mode = int(current_layout.get("bg_mode", 0))
+    mode_label = BG_MODE_LABELS.get(mode, f"Mode {mode}")
+    cv2.putText(
+        image,
+        f"Background: {mode_label}",
+        (12, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (60, 60, 60),
+        1,
+        cv2.LINE_AA,
+    )
+    page_name = "Page 1: Character" if current_page == 0 else "Page 2: Background"
+    cv2.putText(
+        image,
+        page_name,
+        (210, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (60, 60, 60),
+        1,
+        cv2.LINE_AA,
+    )
     for key, ((x0, y0), (x1, y1), label) in ACTION_BUTTONS.items():
-        fill = (85, 90, 220) if key == "quit" else (70, 160, 90)
+        if key == "quit":
+            fill = (85, 90, 220)
+        elif key in ("page_prev", "page_next"):
+            fill = (90, 140, 210)
+        else:
+            fill = (70, 160, 90)
         cv2.rectangle(image, (x0, y0), (x1, y1), fill, thickness=-1)
         cv2.rectangle(image, (x0, y0), (x1, y1), (40, 40, 40), thickness=1)
         cv2.putText(
             image,
             label,
-            (x0 + 52, y0 + 33),
+            (x0 + 14, y0 + 33),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.65,
             (255, 255, 255),
@@ -116,13 +191,18 @@ def pop_action_event(name: str) -> bool:
     return value
 
 
-def create_layout_controls(initial_values: dict[str, int]) -> dict[str, tuple[int, int]]:
+def create_layout_controls(initial_values: dict[str, int], page: int) -> dict[str, tuple[int, int]]:
+    try:
+        cv2.destroyWindow(CONTROL_WINDOW)
+    except cv2.error:
+        pass
     cv2.namedWindow(CONTROL_WINDOW, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(CONTROL_WINDOW, 500, 700)
+    cv2.resizeWindow(CONTROL_WINDOW, 560, 620)
     cv2.setMouseCallback(CONTROL_WINDOW, _on_controls_click)
 
     limits: dict[str, tuple[int, int]] = {}
-    for key, (default, low, high) in TRACKBARS.items():
+    for key in TRACKBAR_PAGES[page]:
+        default, low, high = TRACKBARS[key]
         initial = initial_values.get(key, default)
         cv2.createTrackbar(key, CONTROL_WINDOW, initial - low, high - low, _noop)
         limits[key] = (low, high)
@@ -210,7 +290,9 @@ char_id = "default"
 layout_path = Path("configs") / "characters" / f"{char_id}_layout.json"
 char = CharacterGenerator(char_id, width=CHARACTER_WIDTH, height=CHARACTER_HEIGHT)
 initial_layout = load_layout_settings(layout_path)
-control_limits = create_layout_controls(initial_layout)
+current_layout = initial_layout.copy()
+current_page = 0
+control_limits = create_layout_controls(current_layout, current_page)
 char.set_layout(initial_layout)
 state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
 virtual_cam = open_virtual_camera(char.width, char.height, fps=30)
@@ -228,7 +310,7 @@ while True:
             cv2.circle(frame, (int(y), int(x)), 1, (0, 0, 255), -1)
             frame = cv2.putText(frame, str(pt_num), (int(y), int(x)), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (255, 255, 0))
 
-    current_layout = read_layout_controls(control_limits)
+    current_layout.update(read_layout_controls(control_limits))
     char.set_layout(current_layout)
 
     if len(faces) == 1:
@@ -239,7 +321,7 @@ while True:
 
     cv2.imshow(WEBCAM_WINDOW, frame)
     cv2.imshow(CHARACTER_WINDOW, last_character_frame)
-    cv2.imshow(CONTROL_WINDOW, draw_controls_overlay())
+    cv2.imshow(CONTROL_WINDOW, draw_controls_overlay(current_layout))
 
     if virtual_cam is not None:
         virtual_cam.send(to_rgb(last_character_frame))
@@ -249,6 +331,12 @@ while True:
     if pop_action_event("save"):
         save_layout_settings(layout_path, current_layout)
         print(f"Layout saved to {layout_path}")
+    if pop_action_event("page_prev"):
+        current_page = (current_page - 1) % len(TRACKBAR_PAGES)
+        control_limits = create_layout_controls(current_layout, current_page)
+    if pop_action_event("page_next"):
+        current_page = (current_page + 1) % len(TRACKBAR_PAGES)
+        control_limits = create_layout_controls(current_layout, current_page)
     if pop_action_event("quit"):
         save_layout_settings(layout_path, current_layout)
         break

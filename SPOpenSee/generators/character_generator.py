@@ -35,6 +35,15 @@ class CharacterGenerator:
             "pupil_scale": 4,
             "pupil_x": 0,
             "pupil_y": 0,
+            "bg_mode": 0,
+            "bg_r1": 245,
+            "bg_g1": 245,
+            "bg_b1": 245,
+            "bg_r2": 220,
+            "bg_g2": 220,
+            "bg_b2": 220,
+            "bg_center_x": 0,
+            "bg_center_y": 0,
         }
 
     def set_layout(self, values: dict[str, int]) -> None:
@@ -104,9 +113,49 @@ class CharacterGenerator:
         target_h = max(1, int(h * (target_w / w)))
         return cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
+    def _build_background(self) -> np.ndarray:
+        mode = int(self.layout.get("bg_mode", 0))
+        c1 = np.array(
+            [
+                self.layout.get("bg_b1", 245),
+                self.layout.get("bg_g1", 245),
+                self.layout.get("bg_r1", 245),
+            ],
+            dtype=np.float32,
+        )
+        c2 = np.array(
+            [
+                self.layout.get("bg_b2", 220),
+                self.layout.get("bg_g2", 220),
+                self.layout.get("bg_r2", 220),
+            ],
+            dtype=np.float32,
+        )
+
+        if mode <= 0:
+            bg = np.full((self.height, self.width, 3), c1, dtype=np.float32)
+        elif mode == 1:
+            t = np.linspace(0.0, 1.0, self.height, dtype=np.float32)[:, None, None]
+            row = c1 * (1.0 - t) + c2 * t
+            bg = np.repeat(row, self.width, axis=1)
+        elif mode == 2:
+            t = np.linspace(0.0, 1.0, self.width, dtype=np.float32)[None, :, None]
+            col = c1 * (1.0 - t) + c2 * t
+            bg = np.repeat(col, self.height, axis=0)
+        else:
+            xx, yy = np.meshgrid(np.arange(self.width), np.arange(self.height))
+            cx = int(self.width * (0.5 + self.layout.get("bg_center_x", 0) / 200.0))
+            cy = int(self.height * (0.5 + self.layout.get("bg_center_y", 0) / 200.0))
+            dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2).astype(np.float32)
+            max_dist = max(1.0, np.sqrt(max(cx, self.width - cx) ** 2 + max(cy, self.height - cy) ** 2))
+            t = np.clip(dist / max_dist, 0.0, 1.0)[:, :, None]
+            bg = c1 * (1.0 - t) + c2 * t
+
+        return bg.astype(np.uint8)
+
     def generate(self, state: FaceState) -> np.ndarray:
         canvas = np.zeros((self.height, self.width, 4), dtype=np.uint8)
-        canvas[:, :, :3] = 245
+        canvas[:, :, :3] = self._build_background()
         canvas[:, :, 3] = 255
 
         body = self._resized(self._body, max(40, int(self.width * self.layout["body_scale"] / 100)))

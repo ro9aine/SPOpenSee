@@ -9,9 +9,18 @@
   "hair_x": 8,
   "hair_y": -29,
   "eyes_scale": 55,
-  "eyes_x": 0,
+  "eyes_x": 3,
   "eyes_y": 0,
   "pupil_scale": 4,
   "pupil_x": 0,
-  "pupil_y": 0
+  "pupil_y": 0,
+  "bg_mode": 0,
+  "bg_r1": 245,
+  "bg_g1": 245,
+  "bg_b1": 134,
+  "bg_r2": 187,
+  "bg_g2": 67,
+  "bg_b2": 118,
+  "bg_center_x": 0,
+  "bg_center_y": 0
 }
