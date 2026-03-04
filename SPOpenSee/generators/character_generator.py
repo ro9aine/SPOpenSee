@@ -50,6 +50,10 @@ class CharacterGenerator:
             "bg_scale": 100,
             "bg_x": 0,
             "bg_y": 0,
+            "mask_left": 0,
+            "mask_right": 0,
+            "mask_top": 0,
+            "mask_bottom": 0,
         }
 
     def set_layout(self, values: dict[str, int]) -> None:
@@ -102,6 +106,25 @@ class CharacterGenerator:
         alpha = src_crop[:, :, 3:4].astype(np.float32) / 255.0
         dst_crop[:, :, :3] = (src_crop[:, :, :3] * alpha + dst_crop[:, :, :3] * (1.0 - alpha)).astype(np.uint8)
         dst_crop[:, :, 3:4] = np.maximum(dst_crop[:, :, 3:4], src_crop[:, :, 3:4])
+
+    @staticmethod
+    def _overlay_alpha(dst_alpha: np.ndarray, src: np.ndarray, x: int, y: int) -> None:
+        h, w = src.shape[:2]
+        if x >= dst_alpha.shape[1] or y >= dst_alpha.shape[0] or x + w <= 0 or y + h <= 0:
+            return
+
+        x0 = max(0, x)
+        y0 = max(0, y)
+        x1 = min(dst_alpha.shape[1], x + w)
+        y1 = min(dst_alpha.shape[0], y + h)
+
+        sx0 = x0 - x
+        sy0 = y0 - y
+        sx1 = sx0 + (x1 - x0)
+        sy1 = sy0 + (y1 - y0)
+
+        src_alpha = src[sy0:sy1, sx0:sx1, 3]
+        dst_alpha[y0:y1, x0:x1] = np.maximum(dst_alpha[y0:y1, x0:x1], src_alpha)
 
     @staticmethod
     def _rotation_angle(rotation: RState) -> float:
@@ -206,10 +229,29 @@ class CharacterGenerator:
 
         return bg.astype(np.uint8)
 
-    def generate(self, state: FaceState) -> np.ndarray:
+    def _apply_mask_cuts(self, mask: np.ndarray) -> np.ndarray:
+        h, w = mask.shape[:2]
+        cut_left = int(w * max(0, self.layout.get("mask_left", 0)) / 100.0)
+        cut_right = int(w * max(0, self.layout.get("mask_right", 0)) / 100.0)
+        cut_top = int(h * max(0, self.layout.get("mask_top", 0)) / 100.0)
+        cut_bottom = int(h * max(0, self.layout.get("mask_bottom", 0)) / 100.0)
+
+        if cut_left > 0:
+            mask[:, :cut_left] = 0
+        if cut_right > 0:
+            mask[:, max(0, w - cut_right):] = 0
+        if cut_top > 0:
+            mask[:cut_top, :] = 0
+        if cut_bottom > 0:
+            mask[max(0, h - cut_bottom):, :] = 0
+        return mask
+
+    def generate_with_mask(self, state: FaceState) -> tuple[np.ndarray, np.ndarray]:
         canvas = np.zeros((self.height, self.width, 4), dtype=np.uint8)
-        canvas[:, :, :3] = self._build_background()
+        background = self._build_background()
+        canvas[:, :, :3] = background
         canvas[:, :, 3] = 255
+        mask = np.zeros((self.height, self.width), dtype=np.uint8)
 
         body = self._resized(self._body, max(40, int(self.width * self.layout["body_scale"] / 100)))
         head = self._resized(self._head, max(40, int(self.width * self.layout["head_scale"] / 100)))
@@ -220,6 +262,7 @@ class CharacterGenerator:
         body_x = (self.width - body.shape[1]) // 2 + self.layout["body_x"]
         body_y = self.height - body.shape[0] + self.layout["body_y"]
         self._overlay_rgba(canvas, body, body_x, body_y)
+        self._overlay_alpha(mask, body, body_x, body_y)
 
         head_layer = np.zeros_like(canvas)
         head_x = (self.width - head.shape[1]) // 2 + self.layout["head_x"]
@@ -269,4 +312,13 @@ class CharacterGenerator:
             )
 
         self._overlay_rgba(canvas, head_layer, 0, 0)
-        return cv2.cvtColor(canvas, cv2.COLOR_BGRA2BGR)
+        mask = np.maximum(mask, head_layer[:, :, 3])
+        mask = self._apply_mask_cuts(mask)
+        full_bgr = cv2.cvtColor(canvas, cv2.COLOR_BGRA2BGR)
+        out_bgr = background.copy()
+        out_bgr[mask > 0] = full_bgr[mask > 0]
+        return out_bgr, mask
+
+    def generate(self, state: FaceState) -> np.ndarray:
+        img, _mask = self.generate_with_mask(state)
+        return img

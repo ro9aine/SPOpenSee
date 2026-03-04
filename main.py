@@ -51,6 +51,10 @@ TRACKBARS = {
     "bg_scale": (100, 30, 300),
     "bg_x": (0, -600, 600),
     "bg_y": (0, -600, 600),
+    "mask_left": (0, 0, 90),
+    "mask_right": (0, 0, 90),
+    "mask_top": (0, 0, 90),
+    "mask_bottom": (0, 0, 90),
 }
 TRACKBAR_PAGES = [
     [
@@ -84,6 +88,12 @@ TRACKBAR_PAGES = [
         "bg_x",
         "bg_y",
     ],
+    [
+        "mask_left",
+        "mask_right",
+        "mask_top",
+        "mask_bottom",
+    ],
 ]
 
 ACTION_BUTTONS = {
@@ -101,6 +111,11 @@ BG_MODE_LABELS = {
     2: "Horizontal Gradient",
     3: "Radial Gradient",
     4: "Custom Image",
+}
+PAGE_LABELS = {
+    0: "Page 1: Character",
+    1: "Page 2: Background",
+    2: "Page 3: Mask",
 }
 
 
@@ -187,7 +202,7 @@ def draw_controls_overlay(current_layout: dict[str, int]) -> np.ndarray:
         1,
         cv2.LINE_AA,
     )
-    page_name = "Page 1: Character" if current_page == 0 else "Page 2: Background"
+    page_name = PAGE_LABELS.get(current_page, f"Page {current_page + 1}")
     cv2.putText(
         image,
         page_name,
@@ -336,7 +351,8 @@ char.set_layout(initial_layout)
 char.set_background_image(initial_layout.get("bg_image_path") if isinstance(initial_layout.get("bg_image_path"), str) else None)
 state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
 virtual_cam = open_virtual_camera(char.width, char.height, fps=30)
-last_character_frame = char.generate(FaceState())
+last_state = FaceState()
+last_character_frame, _last_mask_frame = char.generate_with_mask(last_state)
 
 while True:
     ret, frame = cap.read()
@@ -356,8 +372,9 @@ while True:
     if len(faces) == 1:
         current_state = anl.find_all(faces[0])
         state_history.append(current_state)
-        smoothed_state = smooth_face_state(state_history)
-        last_character_frame = char.generate(smoothed_state)
+        last_state = smooth_face_state(state_history)
+
+    last_character_frame, _last_mask_frame = char.generate_with_mask(last_state)
 
     cv2.imshow(WEBCAM_WINDOW, frame)
     cv2.imshow(CHARACTER_WINDOW, last_character_frame)

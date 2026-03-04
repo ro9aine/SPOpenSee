@@ -7,7 +7,7 @@
   "head_y": -17,
   "hair_scale": 98,
   "hair_x": 8,
-  "hair_y": -29,
+  "hair_y": -20,
   "eyes_scale": 55,
   "eyes_x": 3,
   "eyes_y": 0,
@@ -26,5 +26,9 @@
   "bg_scale": 120,
   "bg_x": -147,
   "bg_y": 1,
+  "mask_left": 0,
+  "mask_right": 0,
+  "mask_top": 0,
+  "mask_bottom": 0,
   "bg_image_path": "C:/Users/user/Desktop/fghjkjhgfd.png"
 }
