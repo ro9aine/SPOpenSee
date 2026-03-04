@@ -17,9 +17,11 @@ from spopensee.state import FaceState
 
 SMOOTHING_WINDOW = 4
 
-
 CONTROL_WINDOW = "Layout Controls"
-
+WEBCAM_WINDOW = "Webcam"
+CHARACTER_WINDOW = "Character"
+CHARACTER_WIDTH = 1024
+CHARACTER_HEIGHT = 1024
 
 TRACKBARS = {
     "body_scale": (90, 20, 160),
@@ -43,9 +45,7 @@ ACTION_BUTTONS = {
     "save": ((20, 20), (180, 70), "Save"),
     "quit": ((220, 20), (380, 70), "Quit"),
 }
-
 ACTION_EVENTS = {"save": False, "quit": False}
-
 
 
 def load_layout_settings(path: Path) -> dict[str, int]:
@@ -69,17 +69,16 @@ def load_layout_settings(path: Path) -> dict[str, int]:
         except (TypeError, ValueError):
             value = result[key]
         result[key] = max(low, min(high, value))
-
     return result
 
 
 def save_layout_settings(path: Path, values: dict[str, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    serializable = {key: int(values[key]) for key in TRACKBARS.keys() if key in values}
+    serializable = {key: int(values[key]) for key in TRACKBARS if key in values}
     path.write_text(json.dumps(serializable, indent=2), encoding="utf-8")
 
 
-def _noop(_value: int):
+def _noop(_value: int) -> None:
     pass
 
 
@@ -95,8 +94,7 @@ def _on_controls_click(event: int, x: int, y: int, _flags: int, _param) -> None:
 def draw_controls_overlay() -> np.ndarray:
     image = np.full((95, 400, 3), 238, dtype=np.uint8)
     for key, ((x0, y0), (x1, y1), label) in ACTION_BUTTONS.items():
-        is_quit = key == "quit"
-        fill = (85, 90, 220) if is_quit else (70, 160, 90)
+        fill = (85, 90, 220) if key == "quit" else (70, 160, 90)
         cv2.rectangle(image, (x0, y0), (x1, y1), fill, thickness=-1)
         cv2.rectangle(image, (x0, y0), (x1, y1), (40, 40, 40), thickness=1)
         cv2.putText(
@@ -128,7 +126,6 @@ def create_layout_controls(initial_values: dict[str, int]) -> dict[str, tuple[in
         initial = initial_values.get(key, default)
         cv2.createTrackbar(key, CONTROL_WINDOW, initial - low, high - low, _noop)
         limits[key] = (low, high)
-
     return limits
 
 
@@ -137,8 +134,6 @@ def read_layout_controls(limits: dict[str, tuple[int, int]]) -> dict[str, int]:
     for key, (low, _high) in limits.items():
         values[key] = cv2.getTrackbarPos(key, CONTROL_WINDOW) + low
     return values
-
-
 
 
 def open_virtual_camera(width: int, height: int, fps: int = 30):
@@ -158,6 +153,7 @@ def open_virtual_camera(width: int, height: int, fps: int = 30):
 def to_rgb(frame_bgr: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
+
 def open_camera():
     # Prefer DirectShow on Windows to avoid common MSMF read failures.
     attempts = [
@@ -173,7 +169,6 @@ def open_camera():
         if cap.isOpened():
             return cap
         cap.release()
-
     return None
 
 
@@ -188,7 +183,6 @@ def majority_with_recent_tiebreak(history: deque[FaceState], attr: str):
         value = getattr(state, attr)
         if value in leaders:
             return value
-
     return values[-1]
 
 
@@ -206,7 +200,6 @@ def smooth_face_state(history: deque[FaceState]) -> FaceState:
 
 
 cap = open_camera()
-
 if cap is None:
     print("Cannot open camera with available backends/devices")
     raise SystemExit(1)
@@ -215,7 +208,7 @@ tracker = Tracker(480, 640, silent=True)
 anl = FaceAnalyzer()
 char_id = "default"
 layout_path = Path("configs") / "characters" / f"{char_id}_layout.json"
-char = CharacterGenerator(char_id)
+char = CharacterGenerator(char_id, width=CHARACTER_WIDTH, height=CHARACTER_HEIGHT)
 initial_layout = load_layout_settings(layout_path)
 control_limits = create_layout_controls(initial_layout)
 char.set_layout(initial_layout)
@@ -241,13 +234,11 @@ while True:
     if len(faces) == 1:
         current_state = anl.find_all(faces[0])
         state_history.append(current_state)
-
         smoothed_state = smooth_face_state(state_history)
         last_character_frame = char.generate(smoothed_state)
-        cv2.imshow("Character", last_character_frame)
 
-    cv2.imshow("Character", last_character_frame)
-    cv2.imshow("Webcam", frame)
+    cv2.imshow(WEBCAM_WINDOW, frame)
+    cv2.imshow(CHARACTER_WINDOW, last_character_frame)
     cv2.imshow(CONTROL_WINDOW, draw_controls_overlay())
 
     if virtual_cam is not None:
@@ -269,5 +260,3 @@ cap.release()
 if virtual_cam is not None:
     virtual_cam.close()
 cv2.destroyAllWindows()
-
-
