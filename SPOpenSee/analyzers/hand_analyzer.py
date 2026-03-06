@@ -11,10 +11,7 @@ except ImportError:
     cv2 = None
     mp = None
 
-try:
-    from mediapipe.python.solutions import hands as mp_hands_module
-except ImportError:
-    mp_hands_module = None
+from mediapipe.python.solutions import hands as mp_hands_module
 
 
 class HandAnalyzer:
