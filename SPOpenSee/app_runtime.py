@@ -61,6 +61,11 @@ def majority_with_recent_tiebreak(history: deque[FaceState], attr: str):
     return values[-1]
 
 
+def average_attr(history: deque[FaceState], attr: str) -> float:
+    values = [float(getattr(state, attr)) for state in history]
+    return float(sum(values) / max(1, len(values)))
+
+
 def smooth_face_state(history: deque[FaceState]) -> FaceState:
     smoothed = FaceState()
     smoothed.turn = majority_with_recent_tiebreak(history, "turn")
@@ -71,4 +76,18 @@ def smooth_face_state(history: deque[FaceState]) -> FaceState:
     smoothed.left_brow = majority_with_recent_tiebreak(history, "left_brow")
     smoothed.right_brow = majority_with_recent_tiebreak(history, "right_brow")
     smoothed.rotation = majority_with_recent_tiebreak(history, "rotation")
+    smoothed.left_arm_visible = majority_with_recent_tiebreak(history, "left_arm_visible")
+    smoothed.right_arm_visible = majority_with_recent_tiebreak(history, "right_arm_visible")
+    smoothed.left_shoulder_x = average_attr(history, "left_shoulder_x")
+    smoothed.left_shoulder_y = average_attr(history, "left_shoulder_y")
+    smoothed.right_shoulder_x = average_attr(history, "right_shoulder_x")
+    smoothed.right_shoulder_y = average_attr(history, "right_shoulder_y")
+    smoothed.left_elbow_x = average_attr(history, "left_elbow_x")
+    smoothed.left_elbow_y = average_attr(history, "left_elbow_y")
+    smoothed.right_elbow_x = average_attr(history, "right_elbow_x")
+    smoothed.right_elbow_y = average_attr(history, "right_elbow_y")
+    smoothed.left_hand_x = average_attr(history, "left_hand_x")
+    smoothed.left_hand_y = average_attr(history, "left_hand_y")
+    smoothed.right_hand_x = average_attr(history, "right_hand_x")
+    smoothed.right_hand_y = average_attr(history, "right_hand_y")
     return smoothed

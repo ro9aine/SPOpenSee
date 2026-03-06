@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 
 from opensee.tracker import Tracker
-from spopensee.analyzers import FaceAnalyzer
+from spopensee.analyzers import FaceAnalyzer, PoseAnalyzer
 from spopensee.app_controls import CONTROL_WINDOW, LayoutControls
 from spopensee.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
 from spopensee.audio_input import MicSpeechInput
@@ -27,6 +27,7 @@ def main() -> None:
 
     tracker = Tracker(480, 640, silent=True)
     analyzer = FaceAnalyzer()
+    pose_analyzer = PoseAnalyzer()
     controls = LayoutControls()
 
     char_id = "default"
@@ -44,6 +45,9 @@ def main() -> None:
     mic_input = MicSpeechInput()
     mic_input.start()
     last_state = FaceState()
+    if not pose_analyzer.available:
+        reason = pose_analyzer.unavailable_reason or "unknown reason"
+        print(f"Pose-based arm tracking is disabled: {reason}")
 
     while True:
         ret, frame = cap.read()
@@ -70,6 +74,9 @@ def main() -> None:
         if len(faces) == 1:
             state_history.append(analyzer.find_all(faces[0]))
             last_state = smooth_face_state(state_history)
+
+        last_state = pose_analyzer.enrich_state(frame, last_state)
+        pose_analyzer.draw_debug(frame)
 
         mic_enabled = int(current_layout.get("mic_enabled", 1)) > 0
         if mic_enabled and mic_input.running:
@@ -126,6 +133,7 @@ def main() -> None:
     if virtual_cam is not None:
         virtual_cam.close()
     mic_input.close()
+    pose_analyzer.close()
     cv2.destroyAllWindows()
 
 

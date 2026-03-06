@@ -11,6 +11,14 @@ TRACKBARS = {
     "body_scale": (90, 20, 160),
     "body_x": (0, -200, 200),
     "body_y": (0, -200, 200),
+    "hand_enabled": (1, 0, 1),
+    "hand_mirror_x": (1, 0, 1),
+    "hand_size": (7, 2, 20),
+    "hand_x": (0, -200, 200),
+    "hand_y": (0, -200, 200),
+    "hand_range_x": (70, 20, 150),
+    "hand_range_y": (75, 20, 150),
+    "hand_shoulder_y": (0, -120, 120),
     "head_scale": (62, 20, 120),
     "head_x": (0, -200, 200),
     "head_y": (0, -200, 200),
@@ -62,12 +70,22 @@ TRACKBAR_PAGES = [
         "body_scale",
         "body_x",
         "body_y",
+        "hand_enabled",
+        "hand_mirror_x",
+        "hand_size",
+        "hand_x",
+        "hand_y",
+        "hand_range_x",
+        "hand_range_y",
+        "hand_shoulder_y",
         "head_scale",
         "head_x",
         "head_y",
         "hair_scale",
         "hair_x",
         "hair_y",
+    ],
+    [
         "eyes_scale",
         "eyes_x",
         "eyes_y",
@@ -128,10 +146,11 @@ BG_MODE_LABELS = {
 }
 
 PAGE_LABELS = {
-    0: "Page 1: Character",
-    1: "Page 2: Face Features",
-    2: "Page 3: Background",
-    3: "Page 4: Mask",
+    0: "Page 1: Body and Hands",
+    1: "Page 2: Eyes",
+    2: "Page 3: Face Features",
+    3: "Page 4: Background",
+    4: "Page 5: Mask",
 }
 
 

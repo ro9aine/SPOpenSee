@@ -91,3 +91,19 @@ class FaceState:
 
     # Rotation
     rotation: RState = RState.NORMAL
+
+    # Arm tracking, normalized to camera frame.
+    left_arm_visible: bool = False
+    right_arm_visible: bool = False
+    left_shoulder_x: float = 0.40
+    left_shoulder_y: float = 0.40
+    right_shoulder_x: float = 0.60
+    right_shoulder_y: float = 0.40
+    left_elbow_x: float = 0.34
+    left_elbow_y: float = 0.58
+    right_elbow_x: float = 0.66
+    right_elbow_y: float = 0.58
+    left_hand_x: float = 0.32
+    left_hand_y: float = 0.78
+    right_hand_x: float = 0.68
+    right_hand_y: float = 0.78

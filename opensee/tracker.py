@@ -1,7 +1,17 @@
 import os
+from importlib.util import find_spec
 import numpy as np
 import math
 import cv2
+
+if os.name == "nt" and hasattr(os, "add_dll_directory"):
+    spec = find_spec("onnxruntime")
+    if spec is not None and spec.submodule_search_locations:
+        capi_dir = os.path.join(list(spec.submodule_search_locations)[0], "capi")
+        if os.path.isdir(capi_dir):
+            # onnxruntime ships dependent DLLs in its capi directory on Windows.
+            os.add_dll_directory(capi_dir)
+
 import onnxruntime
 import time
 import queue
