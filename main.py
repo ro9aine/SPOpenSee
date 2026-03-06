@@ -12,7 +12,7 @@ from spopensee.generators import CharacterGenerator
 from spopensee.state import FaceState
 
 
-SMOOTHING_WINDOW = 4
+SMOOTHING_WINDOW = 2
 WEBCAM_WINDOW = "Webcam"
 CHARACTER_WINDOW = "Character"
 CHARACTER_WIDTH = 1280

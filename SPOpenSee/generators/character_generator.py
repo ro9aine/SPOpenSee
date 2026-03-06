@@ -33,7 +33,7 @@ class CharacterGenerator:
         self._bg_image: np.ndarray | None = None
         self._rng = np.random.default_rng()
         self._speech_energy = 0.0
-        self._speech_history: deque[float] = deque(maxlen=10)
+        self._speech_history: deque[float] = deque(maxlen=8)
         self._last_talking_mouth = 2
         self._mouth_hold_frames = 0
 
@@ -299,17 +299,18 @@ class CharacterGenerator:
             self._last_talking_mouth = 2
             return 2
 
-        self._speech_energy = self._speech_energy * 0.7 + energy * 0.3
+        # React to speech changes faster so mouth shapes update more frequently.
+        self._speech_energy = self._speech_energy * 0.45 + energy * 0.55
         self._speech_history.append(self._speech_energy)
         anchor = 2 if self._speech_energy < 0.55 else 3
 
         # Stable tone (e.g. repeated "a-a-a") should not shuffle mouth shapes.
         stable_voice = False
-        if len(self._speech_history) >= 6:
+        if len(self._speech_history) >= 5:
             stable_voice = max(self._speech_history) - min(self._speech_history) < 0.08
 
         if stable_voice:
-            self._mouth_hold_frames = 2
+            self._mouth_hold_frames = 0
             self._last_talking_mouth = anchor
             return anchor
 
@@ -332,8 +333,8 @@ class CharacterGenerator:
 
         next_mouth = int(self._rng.choice(np.array(weighted_pool)))
         self._last_talking_mouth = next_mouth
-        # Faster changes when energy is high.
-        self._mouth_hold_frames = 1 if self._speech_energy > 0.7 else 2
+        # Keep at most 1 frame hold to increase mouth shape change rate.
+        self._mouth_hold_frames = 0 if self._speech_energy > 0.7 else 1
         return next_mouth
 
     def generate_with_mask(
