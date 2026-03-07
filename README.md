@@ -39,6 +39,16 @@ poetry run pytest -q
 poetry run pre-commit install
 ```
 
+Commit messages:
+
+```text
+feat: add webcam controls
+fix(generator): clamp arm anchor
+docs: update setup steps
+```
+
+Allowed commit types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+
 Alternative:
 
 ```powershell
