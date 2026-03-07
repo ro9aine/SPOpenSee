@@ -22,6 +22,14 @@ poetry install
 poetry run python main.py
 ```
 
+Optional flags:
+
+```powershell
+poetry run python main.py --disable-hands
+poetry run python main.py --disable-mic
+poetry run python main.py --disable-hands --disable-mic
+```
+
 Alternative:
 
 ```powershell
