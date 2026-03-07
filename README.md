@@ -28,6 +28,7 @@ Optional flags:
 poetry run python main.py --disable-hands
 poetry run python main.py --disable-mic
 poetry run python main.py --disable-hands --disable-mic
+poetry run python main.py --ui qt
 ```
 
 Checks:

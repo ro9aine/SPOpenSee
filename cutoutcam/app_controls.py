@@ -237,6 +237,7 @@ PAGE_LABELS = {
 
 class LayoutControls:
     def __init__(self):
+        self.uses_opencv_window = True
         self.current_page = 0
         self._action_events = {key: False for key in ACTION_BUTTONS}
         self._trackbar_names: dict[str, str] = {}
@@ -400,3 +401,12 @@ class LayoutControls:
 
     def goto_next_page(self) -> None:
         self.current_page = (self.current_page + 1) % len(TRACKBAR_PAGES)
+
+    def process_events(self) -> None:
+        return
+
+    def close(self) -> None:
+        try:
+            cv2.destroyWindow(CONTROL_WINDOW)
+        except cv2.error:
+            pass

@@ -26,6 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--disable-hands", action="store_true", help="Disable pose-based arm and hand tracking.")
     parser.add_argument("--disable-mic", action="store_true", help="Disable microphone speech input handling.")
+    parser.add_argument("--ui", choices=("opencv", "qt"), default="opencv", help="Choose the controls UI backend.")
     return parser.parse_args(argv)
 
 
@@ -40,6 +41,16 @@ def main() -> None:
     analyzer = FaceAnalyzer()
     pose_analyzer = PoseAnalyzer() if not args.disable_hands else None
     controls = LayoutControls()
+    if args.ui == "qt":
+        try:
+            from cutoutcam.qt_controls import QT_AVAILABLE, QtLayoutControls
+
+            if QT_AVAILABLE:
+                controls = QtLayoutControls()
+            else:
+                print("PySide6 is not installed. Falling back to OpenCV controls.")
+        except Exception as exc:
+            print(f"Cannot start Qt controls ({exc}). Falling back to OpenCV controls.")
 
     char_id = "default"
     layout_path = Path("configs") / "characters" / f"{char_id}_layout.json"
@@ -68,6 +79,7 @@ def main() -> None:
         print("Microphone speech input is disabled by argument.")
 
     while True:
+        controls.process_events()
         ret, frame = cap.read()
         if not ret or frame is None:
             print("Can't receive frame from camera")
@@ -117,7 +129,10 @@ def main() -> None:
 
         cv2.imshow(WEBCAM_WINDOW, frame)
         cv2.imshow(CHARACTER_WINDOW, character_frame)
-        cv2.imshow(CONTROL_WINDOW, controls.draw_overlay(current_layout))
+        if controls.uses_opencv_window:
+            cv2.imshow(CONTROL_WINDOW, controls.draw_overlay(current_layout))
+        else:
+            controls.draw_overlay(current_layout)
 
         if virtual_cam is not None:
             virtual_cam.send(to_rgb(character_frame))
@@ -127,10 +142,10 @@ def main() -> None:
         if controls.pop_action("save"):
             controls.save_settings(layout_path, current_layout)
             print(f"Layout saved to {layout_path}")
-        if controls.pop_action("page_prev"):
+        if controls.uses_opencv_window and controls.pop_action("page_prev"):
             controls.goto_prev_page()
             control_limits = controls.create_window(current_layout)
-        if controls.pop_action("page_next"):
+        if controls.uses_opencv_window and controls.pop_action("page_next"):
             controls.goto_next_page()
             control_limits = controls.create_window(current_layout)
         if controls.pop_action("pick_bg"):
@@ -158,6 +173,7 @@ def main() -> None:
         mic_input.close()
     if pose_analyzer is not None:
         pose_analyzer.close()
+    controls.close()
     cv2.destroyAllWindows()
 
 
