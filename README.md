@@ -1,4 +1,4 @@
-# CutoutCam
+# SPOpenSee
 
 Webcam face-tracking avatar renderer with a South Park style character generator.
 
@@ -47,14 +47,14 @@ Buttons:
 ## Project Structure
 
 ```text
-CutoutCam/
+SPOpenSee/
   main.py
   assets/
     characters/default/parts/
   configs/
     characters/default_layout.json
   opensee/
-  cutoutcam/
+  spopensee/
     analyzers/
       face_analyzer.py
     generators/
@@ -70,3 +70,4 @@ CutoutCam/
 
 - `pyvirtualcam` is optional. If unavailable, app still runs without virtual camera output.
 - Character part PNGs are loaded from `assets/characters/<char_id>/parts`.
+

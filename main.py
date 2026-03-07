@@ -4,12 +4,12 @@ from pathlib import Path
 import cv2
 
 from opensee.tracker import Tracker
-from cutoutcam.analyzers import FaceAnalyzer, PoseAnalyzer
-from cutoutcam.app_controls import CONTROL_WINDOW, LayoutControls
-from cutoutcam.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
-from cutoutcam.audio_input import MicSpeechInput
-from cutoutcam.generators import CharacterGenerator
-from cutoutcam.state import FaceState
+from spopensee.analyzers import FaceAnalyzer, PoseAnalyzer
+from spopensee.app_controls import CONTROL_WINDOW, LayoutControls
+from spopensee.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
+from spopensee.audio_input import MicSpeechInput
+from spopensee.generators import CharacterGenerator
+from spopensee.state import FaceState
 
 
 SMOOTHING_WINDOW = 2
