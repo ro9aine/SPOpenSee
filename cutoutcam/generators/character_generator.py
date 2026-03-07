@@ -1,5 +1,6 @@
 from pathlib import Path
 from collections import deque
+from typing import Mapping, cast
 
 import cv2
 import numpy as np
@@ -21,6 +22,9 @@ class CharacterGenerator:
         self._closed_eyes = self._load_part("closed-eyes.png")
         self._pupil = self._load_part("pupil.png")
         self._left_brow = self._load_part("left-brow.png")
+        self._shoulder_part = self._load_part("shoulder.png")
+        self._arm_part = self._load_part("arm.png")
+        self._hand_part = self._load_part("hand.png")
         self._mouth_closed = self._load_part("mouth-1.png")
         self._mouth_open = self._load_part("mouth-2.png")
         self._mouth_wide_open = self._load_part("mouth-3.png")
@@ -41,6 +45,14 @@ class CharacterGenerator:
             "body_scale": 90,
             "body_x": 0,
             "body_y": 0,
+            "hand_enabled": 1,
+            "hand_mirror_x": 1,
+            "hand_size": 7,
+            "hand_x": 0,
+            "hand_y": 0,
+            "hand_range_x": 70,
+            "hand_range_y": 75,
+            "hand_shoulder_y": 0,
             "head_scale": 62,
             "head_x": 0,
             "head_y": 0,
@@ -82,7 +94,7 @@ class CharacterGenerator:
             "mask_bottom": 0,
         }
 
-    def set_layout(self, values: dict[str, int]) -> None:
+    def set_layout(self, values: Mapping[str, int | str]) -> None:
         for key, value in values.items():
             if key in self.layout:
                 self.layout[key] = int(value)
@@ -337,6 +349,218 @@ class CharacterGenerator:
         self._mouth_hold_frames = 0 if self._speech_energy > 0.7 else 1
         return next_mouth
 
+    @staticmethod
+    def _draw_hand(canvas: np.ndarray, elbow: tuple[int, int], hand: tuple[int, int], palm_radius: int) -> None:
+        arm_color = (205, 190, 175, 255)
+        outline_color = (120, 105, 95, 255)
+        arm_thickness = max(6, palm_radius)
+        outline_thickness = arm_thickness + 2
+
+        cv2.line(canvas, elbow, hand, outline_color, outline_thickness, cv2.LINE_AA)
+        cv2.line(canvas, elbow, hand, arm_color, arm_thickness, cv2.LINE_AA)
+        cv2.circle(canvas, hand, palm_radius + 2, outline_color, -1, cv2.LINE_AA)
+        cv2.circle(canvas, hand, palm_radius, arm_color, -1, cv2.LINE_AA)
+
+    @staticmethod
+    def _draw_arm_segment(
+        canvas: np.ndarray,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        thickness: int,
+    ) -> None:
+        arm_color = (180, 195, 215, 255)
+        outline_color = (110, 125, 145, 255)
+        cv2.line(canvas, start, end, outline_color, thickness + 4, cv2.LINE_AA)
+        cv2.line(canvas, start, end, arm_color, thickness, cv2.LINE_AA)
+
+    @staticmethod
+    def _segment_angle(start: tuple[int, int], end: tuple[int, int]) -> float:
+        dx = float(end[0] - start[0])
+        dy = float(end[1] - start[1])
+        return float(np.degrees(np.arctan2(dy, dx)) + 90.0)
+
+    @staticmethod
+    def _segment_length(start: tuple[int, int], end: tuple[int, int]) -> float:
+        return float(np.hypot(end[0] - start[0], end[1] - start[1]))
+
+    def _transform_part(
+        self,
+        part: np.ndarray,
+        anchor: tuple[int, int],
+        angle: float,
+        scale_x: float,
+        scale_y: float,
+        mirror_x: bool = False,
+    ) -> tuple[np.ndarray, int, int]:
+        src = cv2.flip(part, 1) if mirror_x else part
+        scaled_w = max(1, int(round(src.shape[1] * max(0.05, scale_x))))
+        scaled_h = max(1, int(round(src.shape[0] * max(0.05, scale_y))))
+        resized = cv2.resize(src, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
+
+        center = (scaled_w / 2.0, scaled_h / 2.0)
+        matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+        cos_v = abs(matrix[0, 0])
+        sin_v = abs(matrix[0, 1])
+        bound_w = max(1, int(np.ceil((scaled_h * sin_v) + (scaled_w * cos_v))))
+        bound_h = max(1, int(np.ceil((scaled_h * cos_v) + (scaled_w * sin_v))))
+        matrix[0, 2] += bound_w / 2.0 - center[0]
+        matrix[1, 2] += bound_h / 2.0 - center[1]
+
+        rotated = cv2.warpAffine(
+            resized,
+            matrix,
+            (bound_w, bound_h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0, 0, 0, 0),
+        )
+
+        original_anchor = np.array([scaled_w / 2.0, 0.0, 1.0], dtype=np.float32)
+        rotated_anchor = matrix @ original_anchor
+        pos_x = int(round(anchor[0] - rotated_anchor[0]))
+        pos_y = int(round(anchor[1] - rotated_anchor[1]))
+        return rotated, pos_x, pos_y
+
+    def _overlay_segment_part(
+        self,
+        canvas: np.ndarray,
+        part: np.ndarray,
+        start: tuple[int, int],
+        end: tuple[int, int],
+        width_scale: float,
+        mirror_x: bool = False,
+    ) -> None:
+        length = max(8.0, self._segment_length(start, end))
+        angle = self._segment_angle(start, end)
+        scale_x = width_scale
+        scale_y = length / max(1, part.shape[0])
+        transformed, pos_x, pos_y = self._transform_part(
+            part,
+            start,
+            angle,
+            scale_x=scale_x,
+            scale_y=scale_y,
+            mirror_x=mirror_x,
+        )
+        self._overlay_rgba(canvas, transformed, pos_x, pos_y)
+
+    def _overlay_joint_part(
+        self,
+        canvas: np.ndarray,
+        part: np.ndarray,
+        center: tuple[int, int],
+        size_scale: float,
+        mirror_x: bool = False,
+    ) -> None:
+        src = cv2.flip(part, 1) if mirror_x else part
+        scaled_w = max(1, int(round(src.shape[1] * max(0.05, size_scale))))
+        scaled_h = max(1, int(round(src.shape[0] * max(0.05, size_scale))))
+        resized = cv2.resize(src, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
+        pos_x = int(round(center[0] - scaled_w / 2.0))
+        pos_y = int(round(center[1] - scaled_h / 2.0))
+        self._overlay_rgba(canvas, resized, pos_x, pos_y)
+
+    def _arm_points(
+        self,
+        body_x: int,
+        body_y: int,
+        body: np.ndarray,
+        shoulder_x_ratio: float,
+        state_shoulder: tuple[float, float],
+        state_elbow: tuple[float, float],
+        state_wrist: tuple[float, float],
+    ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+        shoulder = (
+            body_x + int(body.shape[1] * shoulder_x_ratio) + int(self.layout.get("hand_x", 0)),
+            body_y + int(body.shape[0] * 0.22) + int(self.layout.get("hand_shoulder_y", 0)),
+        )
+        motion_scale_x = body.shape[1] * self.layout.get("hand_range_x", 70) / 100.0
+        motion_scale_y = body.shape[0] * self.layout.get("hand_range_y", 75) / 100.0
+        mirror_x = -1.0 if int(self.layout.get("hand_mirror_x", 1)) > 0 else 1.0
+
+        elbow = (
+            int(shoulder[0] + (state_elbow[0] - state_shoulder[0]) * motion_scale_x * mirror_x),
+            int(shoulder[1] + (state_elbow[1] - state_shoulder[1]) * motion_scale_y + self.layout.get("hand_y", 0)),
+        )
+        wrist = (
+            int(elbow[0] + (state_wrist[0] - state_elbow[0]) * motion_scale_x * mirror_x),
+            int(elbow[1] + (state_wrist[1] - state_elbow[1]) * motion_scale_y),
+        )
+        return shoulder, elbow, wrist
+
+    @staticmethod
+    def _fallback_elbow(shoulder: tuple[int, int], wrist: tuple[int, int], bend_dir: int) -> tuple[int, int]:
+        mid_x = (shoulder[0] + wrist[0]) // 2
+        mid_y = (shoulder[1] + wrist[1]) // 2
+        dx = wrist[0] - shoulder[0]
+        dy = wrist[1] - shoulder[1]
+        length = max(1.0, float(np.hypot(dx, dy)))
+        normal_x = -dy / length
+        normal_y = dx / length
+        bend = max(18, int(length * 0.18))
+        return (
+            int(mid_x + normal_x * bend * bend_dir),
+            int(mid_y + normal_y * bend * bend_dir),
+        )
+
+    def _draw_hands(
+        self,
+        canvas: np.ndarray,
+        body_x: int,
+        body_y: int,
+        body: np.ndarray,
+        state: FaceState,
+    ) -> None:
+        if int(self.layout.get("hand_enabled", 1)) <= 0:
+            return
+
+        size_scale = max(0.25, float(self.layout.get("hand_size", 7)) / 7.0)
+        arm_width_scale = max(0.25, size_scale)
+        joint_scale = max(0.25, size_scale)
+
+        left_shoulder, left_elbow, left_hand = self._arm_points(
+            body_x,
+            body_y,
+            body,
+            0.34,
+            (state.left_shoulder_x, state.left_shoulder_y),
+            (state.left_elbow_x, state.left_elbow_y),
+            (state.left_hand_x, state.left_hand_y),
+        )
+        right_shoulder, right_elbow, right_hand = self._arm_points(
+            body_x,
+            body_y,
+            body,
+            0.66,
+            (state.right_shoulder_x, state.right_shoulder_y),
+            (state.right_elbow_x, state.right_elbow_y),
+            (state.right_hand_x, state.right_hand_y),
+        )
+
+        if state.left_arm_visible:
+            if abs(left_elbow[0] - left_shoulder[0]) + abs(left_elbow[1] - left_shoulder[1]) < 8:
+                left_elbow = self._fallback_elbow(left_shoulder, left_hand, -1)
+            self._overlay_segment_part(
+                canvas, self._arm_part, left_shoulder, left_elbow, arm_width_scale, mirror_x=False
+            )
+            self._overlay_segment_part(
+                canvas, self._arm_part, left_elbow, left_hand, arm_width_scale, mirror_x=False
+            )
+            self._overlay_joint_part(canvas, self._shoulder_part, left_shoulder, joint_scale, mirror_x=False)
+            self._overlay_joint_part(canvas, self._hand_part, left_hand, joint_scale, mirror_x=False)
+
+        if state.right_arm_visible:
+            if abs(right_elbow[0] - right_shoulder[0]) + abs(right_elbow[1] - right_shoulder[1]) < 8:
+                right_elbow = self._fallback_elbow(right_shoulder, right_hand, 1)
+            self._overlay_segment_part(
+                canvas, self._arm_part, right_shoulder, right_elbow, arm_width_scale, mirror_x=True
+            )
+            self._overlay_segment_part(
+                canvas, self._arm_part, right_elbow, right_hand, arm_width_scale, mirror_x=True
+            )
+            self._overlay_joint_part(canvas, self._shoulder_part, right_shoulder, joint_scale, mirror_x=True)
+            self._overlay_joint_part(canvas, self._hand_part, right_hand, joint_scale, mirror_x=True)
+
     def generate_with_mask(
         self,
         state: FaceState,
@@ -402,8 +626,10 @@ class CharacterGenerator:
 
         body_x = (self.width - body.shape[1]) // 2 + self.layout["body_x"]
         body_y = self.height - body.shape[0] + self.layout["body_y"]
-        self._overlay_rgba(canvas, body, body_x, body_y)
-        self._overlay_alpha(mask, body, body_x, body_y)
+        body_layer = np.zeros_like(canvas)
+        self._overlay_rgba(body_layer, body, body_x, body_y)
+        self._overlay_rgba(canvas, body_layer, 0, 0)
+        mask = np.maximum(mask, body_layer[:, :, 3])
 
         head_layer = np.zeros_like(canvas)
         head_x = (self.width - head.shape[1]) // 2 + self.layout["head_x"]
@@ -417,7 +643,13 @@ class CharacterGenerator:
         unified_brow_state = self._merged_brow_state(state.left_brow, state.right_brow)
         brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + self.layout["brow_y"]
         left_brow_x = eyes_x + int(eyes_white.shape[1] * 0.02) + self.layout["brow_x"]
-        right_brow_x = eyes_x + eyes_white.shape[1] - right_brow.shape[1] - int(eyes_white.shape[1] * 0.02) - self.layout["brow_x"]
+        right_brow_x = (
+            eyes_x
+            + eyes_white.shape[1]
+            - right_brow.shape[1]
+            - int(eyes_white.shape[1] * 0.02)
+            - self.layout["brow_x"]
+        )
         self._overlay_rgba(
             head_layer,
             brow,
@@ -476,7 +708,10 @@ class CharacterGenerator:
                 6: mouth_talk_6,
                 7: mouth_talk_7,
             }
-            mouth = mouth_map.get(mouth_idx, mouth_open)
+            mouth = mouth_map.get(
+                mouth_idx,
+                mouth_open,
+            )
 
         mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx
         mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
@@ -490,17 +725,23 @@ class CharacterGenerator:
         if abs(angle) > 1e-6:
             center = (head_x + head.shape[1] // 2, head_y + head.shape[0] // 2)
             matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-            head_layer = cv2.warpAffine(
+            head_layer = cast(np.ndarray, cv2.warpAffine(
                 head_layer,
                 matrix,
                 (self.width, self.height),
                 flags=cv2.INTER_LINEAR,
                 borderMode=cv2.BORDER_CONSTANT,
                 borderValue=(0, 0, 0, 0),
-            )
+            ))
 
         self._overlay_rgba(canvas, head_layer, 0, 0)
         mask = np.maximum(mask, head_layer[:, :, 3])
+
+        hands_layer = np.zeros_like(canvas)
+        self._draw_hands(hands_layer, body_x, body_y, body, state)
+        self._overlay_rgba(canvas, hands_layer, 0, 0)
+        mask = np.maximum(mask, hands_layer[:, :, 3])
+
         mask = self._apply_mask_cuts(mask)
         full_bgr = cv2.cvtColor(canvas, cv2.COLOR_BGRA2BGR)
         out_bgr = background.copy()

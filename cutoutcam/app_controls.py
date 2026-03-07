@@ -1,16 +1,26 @@
 from pathlib import Path
 import json
+from typing import TypeAlias
 
 import cv2
 import numpy as np
 
 
 CONTROL_WINDOW = "Layout Controls"
+LayoutValue: TypeAlias = int | str
 
 TRACKBARS = {
     "body_scale": (90, 20, 160),
     "body_x": (0, -200, 200),
     "body_y": (0, -200, 200),
+    "hand_enabled": (1, 0, 1),
+    "hand_mirror_x": (1, 0, 1),
+    "hand_size": (7, 2, 20),
+    "hand_x": (0, -200, 200),
+    "hand_y": (0, -200, 200),
+    "hand_range_x": (70, 20, 150),
+    "hand_range_y": (75, 20, 150),
+    "hand_shoulder_y": (0, -120, 120),
     "head_scale": (62, 20, 120),
     "head_x": (0, -200, 200),
     "head_y": (0, -200, 200),
@@ -62,12 +72,22 @@ TRACKBAR_PAGES = [
         "body_scale",
         "body_x",
         "body_y",
+        "hand_enabled",
+        "hand_mirror_x",
+        "hand_size",
+        "hand_x",
+        "hand_y",
+        "hand_range_x",
+        "hand_range_y",
+        "hand_shoulder_y",
         "head_scale",
         "head_x",
         "head_y",
         "hair_scale",
         "hair_x",
         "hair_y",
+    ],
+    [
         "eyes_scale",
         "eyes_x",
         "eyes_y",
@@ -128,10 +148,11 @@ BG_MODE_LABELS = {
 }
 
 PAGE_LABELS = {
-    0: "Page 1: Character",
-    1: "Page 2: Face Features",
-    2: "Page 3: Background",
-    3: "Page 4: Mask",
+    0: "Page 1: Body and Hands",
+    1: "Page 2: Eyes",
+    2: "Page 3: Face Features",
+    3: "Page 4: Background",
+    4: "Page 5: Mask",
 }
 
 
@@ -141,8 +162,8 @@ class LayoutControls:
         self._action_events = {key: False for key in ACTION_BUTTONS}
 
     @staticmethod
-    def load_settings(path: Path) -> dict[str, int]:
-        defaults = {key: default for key, (default, _low, _high) in TRACKBARS.items()}
+    def load_settings(path: Path) -> dict[str, LayoutValue]:
+        defaults: dict[str, LayoutValue] = {key: default for key, (default, _low, _high) in TRACKBARS.items()}
         if not path.exists():
             return defaults
 
@@ -169,9 +190,9 @@ class LayoutControls:
         return result
 
     @staticmethod
-    def save_settings(path: Path, values: dict[str, int]) -> None:
+    def save_settings(path: Path, values: dict[str, LayoutValue]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        serializable = {key: int(values[key]) for key in TRACKBARS if key in values}
+        serializable: dict[str, LayoutValue] = {key: int(values[key]) for key in TRACKBARS if key in values}
         bg_image_path = values.get("bg_image_path")
         if isinstance(bg_image_path, str) and bg_image_path:
             serializable["bg_image_path"] = bg_image_path
@@ -208,7 +229,7 @@ class LayoutControls:
             if x0 <= x <= x1 and y0 <= y <= y1:
                 self._action_events[key] = True
 
-    def create_window(self, initial_values: dict[str, int]) -> dict[str, tuple[int, int]]:
+    def create_window(self, initial_values: dict[str, LayoutValue]) -> dict[str, tuple[int, int]]:
         try:
             cv2.destroyWindow(CONTROL_WINDOW)
         except cv2.error:
@@ -221,7 +242,8 @@ class LayoutControls:
         for key in TRACKBAR_PAGES[self.current_page]:
             default, low, high = TRACKBARS[key]
             initial = initial_values.get(key, default)
-            cv2.createTrackbar(key, CONTROL_WINDOW, initial - low, high - low, self._noop)
+            initial_int = int(initial)
+            cv2.createTrackbar(key, CONTROL_WINDOW, initial_int - low, high - low, self._noop)
             limits[key] = (low, high)
         return limits
 
@@ -232,7 +254,7 @@ class LayoutControls:
             values[key] = cv2.getTrackbarPos(key, CONTROL_WINDOW) + low
         return values
 
-    def draw_overlay(self, current_layout: dict[str, int]) -> np.ndarray:
+    def draw_overlay(self, current_layout: dict[str, LayoutValue]) -> np.ndarray:
         image = np.full((145, 400, 3), 238, dtype=np.uint8)
         mode = int(current_layout.get("bg_mode", 0))
         mode_label = BG_MODE_LABELS.get(mode, f"Mode {mode}")

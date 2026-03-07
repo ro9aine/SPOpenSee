@@ -1,4 +1,4 @@
-# SPOpenSee
+# CutoutCam
 
 Webcam face-tracking avatar renderer with a South Park style character generator.
 
@@ -20,6 +20,23 @@ Webcam face-tracking avatar renderer with a South Park style character generator
 ```powershell
 poetry install
 poetry run python main.py
+```
+
+Optional flags:
+
+```powershell
+poetry run python main.py --disable-hands
+poetry run python main.py --disable-mic
+poetry run python main.py --disable-hands --disable-mic
+```
+
+Checks:
+
+```powershell
+poetry run flake8 main.py cutoutcam tests --jobs 1
+poetry run mypy
+poetry run pytest -q
+poetry run pre-commit install
 ```
 
 Alternative:
@@ -47,14 +64,14 @@ Buttons:
 ## Project Structure
 
 ```text
-SPOpenSee/
+CutoutCam/
   main.py
   assets/
     characters/default/parts/
   configs/
     characters/default_layout.json
   opensee/
-  spopensee/
+  cutoutcam/
     analyzers/
       face_analyzer.py
     generators/
@@ -70,4 +87,3 @@ SPOpenSee/
 
 - `pyvirtualcam` is optional. If unavailable, app still runs without virtual camera output.
 - Character part PNGs are loaded from `assets/characters/<char_id>/parts`.
-

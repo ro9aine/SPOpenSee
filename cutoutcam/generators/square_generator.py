@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from typing import cast
 
 from ..state import BState, EState, EmotionState, FState, FaceState, MState, RState
 
@@ -136,14 +137,14 @@ class SquareGenerator:
         if abs(angle) > 1e-6:
             center = (self.width // 2, self.height // 2)
             matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-            canvas = cv2.warpAffine(
+            canvas = cast(np.ndarray, cv2.warpAffine(
                 canvas,
                 matrix,
                 (self.width, self.height),
                 flags=cv2.INTER_LINEAR,
                 borderMode=cv2.BORDER_CONSTANT,
                 borderValue=self.bg_color,
-            )
+            ))
 
         return canvas
 

@@ -1,15 +1,16 @@
+import argparse
 from collections import deque
 from pathlib import Path
 
 import cv2
 
 from opensee.tracker import Tracker
-from spopensee.analyzers import FaceAnalyzer
-from spopensee.app_controls import CONTROL_WINDOW, LayoutControls
-from spopensee.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
-from spopensee.audio_input import MicSpeechInput
-from spopensee.generators import CharacterGenerator
-from spopensee.state import FaceState
+from cutoutcam.analyzers import FaceAnalyzer, PoseAnalyzer
+from cutoutcam.app_controls import CONTROL_WINDOW, LayoutControls, LayoutValue
+from cutoutcam.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
+from cutoutcam.audio_input import MicSpeechInput
+from cutoutcam.generators import CharacterGenerator
+from cutoutcam.state import FaceState
 
 
 SMOOTHING_WINDOW = 2
@@ -17,9 +18,19 @@ WEBCAM_WINDOW = "Webcam"
 CHARACTER_WINDOW = "Character"
 CHARACTER_WIDTH = 1280
 CHARACTER_HEIGHT = 720
+SHOW_LANDMARK_LABELS = False
+POSE_EVERY_N_FRAMES = 2
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--disable-hands", action="store_true", help="Disable pose-based arm and hand tracking.")
+    parser.add_argument("--disable-mic", action="store_true", help="Disable microphone speech input handling.")
+    return parser.parse_args(argv)
 
 
 def main() -> None:
+    args = parse_args()
     cap = open_camera()
     if cap is None:
         print("Cannot open camera with available backends/devices")
@@ -27,23 +38,34 @@ def main() -> None:
 
     tracker = Tracker(480, 640, silent=True)
     analyzer = FaceAnalyzer()
+    pose_analyzer = PoseAnalyzer() if not args.disable_hands else None
     controls = LayoutControls()
 
     char_id = "default"
     layout_path = Path("configs") / "characters" / f"{char_id}_layout.json"
     character = CharacterGenerator(char_id, width=CHARACTER_WIDTH, height=CHARACTER_HEIGHT)
 
-    current_layout = controls.load_settings(layout_path)
+    current_layout: dict[str, LayoutValue] = controls.load_settings(layout_path)
     control_limits = controls.create_window(current_layout)
     character.set_layout(current_layout)
-    if isinstance(current_layout.get("bg_image_path"), str):
-        character.set_background_image(current_layout.get("bg_image_path"))
+    bg_image_path = current_layout.get("bg_image_path")
+    if isinstance(bg_image_path, str):
+        character.set_background_image(bg_image_path)
 
     state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
     virtual_cam = open_virtual_camera(character.width, character.height, fps=30)
-    mic_input = MicSpeechInput()
-    mic_input.start()
+    mic_input = MicSpeechInput() if not args.disable_mic else None
+    if mic_input is not None:
+        mic_input.start()
     last_state = FaceState()
+    frame_index = 0
+    if args.disable_hands:
+        print("Pose-based arm tracking is disabled by argument.")
+    elif pose_analyzer is not None and not pose_analyzer.available:
+        reason = pose_analyzer.unavailable_reason or "unknown reason"
+        print(f"Pose-based arm tracking is disabled: {reason}")
+    if args.disable_mic:
+        print("Microphone speech input is disabled by argument.")
 
     while True:
         ret, frame = cap.read()
@@ -55,14 +77,15 @@ def main() -> None:
         for face in faces:
             for pt_num, (x, y, c) in enumerate(face.lms):
                 cv2.circle(frame, (int(y), int(x)), 1, (0, 0, 255), -1)
-                frame = cv2.putText(
-                    frame,
-                    str(pt_num),
-                    (int(y), int(x)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.25,
-                    (255, 255, 0),
-                )
+                if SHOW_LANDMARK_LABELS:
+                    frame = cv2.putText(
+                        frame,
+                        str(pt_num),
+                        (int(y), int(x)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.25,
+                        (255, 255, 0),
+                    )
 
         current_layout.update(controls.read_values(control_limits))
         character.set_layout(current_layout)
@@ -71,8 +94,13 @@ def main() -> None:
             state_history.append(analyzer.find_all(faces[0]))
             last_state = smooth_face_state(state_history)
 
+        if pose_analyzer is not None and frame_index % POSE_EVERY_N_FRAMES == 0:
+            last_state = pose_analyzer.enrich_state(frame, last_state)
+        if pose_analyzer is not None:
+            pose_analyzer.draw_debug(frame)
+
         mic_enabled = int(current_layout.get("mic_enabled", 1)) > 0
-        if mic_enabled and mic_input.running:
+        if mic_enabled and mic_input is not None and mic_input.running:
             mic_threshold = max(0.01, min(1.0, int(current_layout.get("mic_threshold", 8)) / 100.0))
             mic_gain = max(0.1, int(current_layout.get("mic_gain", 200)) / 10.0)
             is_speaking, speech_energy = mic_input.read_state(threshold=mic_threshold, gain=mic_gain)
@@ -121,11 +149,15 @@ def main() -> None:
         if controls.pop_action("quit") or key == 27:
             controls.save_settings(layout_path, current_layout)
             break
+        frame_index += 1
 
     cap.release()
     if virtual_cam is not None:
         virtual_cam.close()
-    mic_input.close()
+    if mic_input is not None:
+        mic_input.close()
+    if pose_analyzer is not None:
+        pose_analyzer.close()
     cv2.destroyAllWindows()
 
 
