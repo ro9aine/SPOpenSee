@@ -20,3 +20,5 @@ def test_generate_with_mask_supports_visible_arms() -> None:
 
     assert frame.any()
     assert mask.any()
+
+asdf
