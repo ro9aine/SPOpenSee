@@ -108,8 +108,10 @@ class Analizer:
         face_width = max_x - min_x
         face_height = max_y - min_y
 
-        horizontal_thresh = face_width * 0.10
-        vertical_thresh = face_height * 0.12
+        # Require a larger horizontal deviation so side-head sprites
+        # do not trigger on small natural face drift.
+        horizontal_thresh = face_width * 0.2
+        vertical_thresh = face_height * 0.15
 
         h_state = None
         v_state = None

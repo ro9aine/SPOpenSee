@@ -8,6 +8,12 @@ import numpy as np
 
 CONTROL_WINDOW = "Layout Controls"
 LayoutValue: TypeAlias = int | str
+UI_STATE_DEFAULTS = {
+    "ui_show_points": 1,
+    "ui_tracking_enabled": 1,
+    "ui_hands_enabled": 1,
+    "ui_mic_enabled": 1,
+}
 
 TRACKBARS = {
     "body_scale": (90, 20, 160),
@@ -299,6 +305,7 @@ class LayoutControls:
     @staticmethod
     def load_settings(path: Path) -> dict[str, LayoutValue]:
         defaults: dict[str, LayoutValue] = {key: default for key, (default, _low, _high) in TRACKBARS.items()}
+        defaults.update(UI_STATE_DEFAULTS)
         if not path.exists():
             return defaults
 
@@ -322,12 +329,21 @@ class LayoutControls:
             except (TypeError, ValueError):
                 value = result[key]
             result[key] = max(low, min(high, value))
+        for key, default in UI_STATE_DEFAULTS.items():
+            value = data.get(key, default)
+            try:
+                result[key] = 1 if int(value) > 0 else 0
+            except (TypeError, ValueError):
+                result[key] = default
         return result
 
     @staticmethod
     def save_settings(path: Path, values: dict[str, LayoutValue]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         serializable: dict[str, LayoutValue] = {key: int(values[key]) for key in TRACKBARS if key in values}
+        for key in UI_STATE_DEFAULTS:
+            if key in values:
+                serializable[key] = 1 if int(values[key]) > 0 else 0
         bg_image_path = values.get("bg_image_path")
         if isinstance(bg_image_path, str) and bg_image_path:
             serializable["bg_image_path"] = bg_image_path
@@ -467,3 +483,15 @@ class LayoutControls:
 
     def update_previews(self, _points_frame, _character_frame) -> None:
         return
+
+    def is_tracking_enabled(self) -> bool:
+        return True
+
+    def is_hands_enabled(self) -> bool:
+        return True
+
+    def is_mic_enabled(self) -> bool:
+        return True
+
+    def is_points_preview_enabled(self) -> bool:
+        return True

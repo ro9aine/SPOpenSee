@@ -6,7 +6,7 @@ def test_parse_args_defaults() -> None:
 
     assert args.disable_hands is False
     assert args.disable_mic is False
-    assert args.ui == "opencv"
+    assert args.ui == "qt"
 
 
 def test_parse_args_supports_disable_flags() -> None:

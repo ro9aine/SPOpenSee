@@ -27,7 +27,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--disable-hands", action="store_true", help="Disable pose-based arm and hand tracking.")
     parser.add_argument("--disable-mic", action="store_true", help="Disable microphone speech input handling.")
-    parser.add_argument("--ui", choices=("opencv", "qt"), default="opencv", help="Choose the controls UI backend.")
+    parser.add_argument("--ui", choices=("opencv", "qt"), default="qt", help="Choose the controls UI backend.")
     return parser.parse_args(argv)
 
 
@@ -86,34 +86,43 @@ def main() -> None:
             print("Can't receive frame from camera")
             continue
 
-        faces = tracker.predict(frame)
-        for face in faces:
-            for pt_num, (x, y, c) in enumerate(face.lms):
-                cv2.circle(frame, (int(y), int(x)), 1, (0, 0, 255), -1)
-                if SHOW_LANDMARK_LABELS:
-                    frame = cv2.putText(
-                        frame,
-                        str(pt_num),
-                        (int(y), int(x)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.25,
-                        (255, 255, 0),
-                    )
+        tracking_enabled = controls.is_tracking_enabled()
+        hands_enabled = controls.is_hands_enabled()
+        mic_runtime_enabled = controls.is_mic_enabled()
+        points_preview_enabled = controls.is_points_preview_enabled()
+
+        if tracking_enabled:
+            faces = tracker.predict(frame)
+            if points_preview_enabled:
+                for face in faces:
+                    for pt_num, (x, y, c) in enumerate(face.lms):
+                        cv2.circle(frame, (int(y), int(x)), 1, (0, 0, 255), -1)
+                        if SHOW_LANDMARK_LABELS:
+                            frame = cv2.putText(
+                                frame,
+                                str(pt_num),
+                                (int(y), int(x)),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.25,
+                                (255, 255, 0),
+                            )
+        else:
+            faces = []
 
         current_layout.update(controls.read_values(control_limits))
         character.set_layout(current_layout)
 
-        if len(faces) == 1:
+        if tracking_enabled and len(faces) == 1:
             state_history.append(analyzer.find_all(faces[0]))
             last_state = smooth_face_state(state_history)
 
-        if pose_analyzer is not None and frame_index % POSE_EVERY_N_FRAMES == 0:
+        if hands_enabled and pose_analyzer is not None and frame_index % POSE_EVERY_N_FRAMES == 0:
             last_state = pose_analyzer.enrich_state(frame, last_state)
-        if pose_analyzer is not None:
+        if points_preview_enabled and hands_enabled and pose_analyzer is not None:
             pose_analyzer.draw_debug(frame)
 
         mic_enabled = int(current_layout.get("mic_enabled", 1)) > 0
-        if mic_enabled and mic_input is not None and mic_input.running:
+        if mic_runtime_enabled and mic_enabled and mic_input is not None and mic_input.running:
             mic_threshold = max(0.01, min(1.0, int(current_layout.get("mic_threshold", 8)) / 100.0))
             mic_gain = max(0.1, int(current_layout.get("mic_gain", 200)) / 10.0)
             is_speaking, speech_energy = mic_input.read_state(threshold=mic_threshold, gain=mic_gain)
@@ -134,7 +143,10 @@ def main() -> None:
             cv2.imshow(CONTROL_WINDOW, controls.draw_overlay(current_layout))
         else:
             controls.draw_overlay(current_layout)
-            controls.update_previews(frame, character_frame)
+            if points_preview_enabled:
+                controls.update_previews(frame, character_frame)
+            else:
+                controls.update_previews(None, character_frame)
 
         if virtual_cam is not None:
             virtual_cam.send(to_rgb(character_frame))

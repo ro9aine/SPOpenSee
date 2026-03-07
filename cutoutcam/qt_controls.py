@@ -93,6 +93,9 @@ class QtLayoutControls:
         self._value_labels: dict[str, Any] = {}
         self._footer_label: Any | None = None
         self._points_toggle: Any | None = None
+        self._tracking_toggle: Any | None = None
+        self._hands_toggle: Any | None = None
+        self._mic_toggle: Any | None = None
         self._character_label: Any | None = None
         self._points_label: Any | None = None
         self._points_group: Any | None = None
@@ -198,9 +201,22 @@ class QtLayoutControls:
             left_layout.addLayout(row)
 
         self._points_toggle = QCheckBox("Show points section")
-        self._points_toggle.setChecked(True)
+        self._points_toggle.setChecked(int(self._values.get("ui_show_points", 1)) > 0)
         self._points_toggle.toggled.connect(self._toggle_points_section)
         left_layout.addWidget(self._points_toggle)
+
+        toggles_row = QHBoxLayout()
+        toggles_row.setSpacing(8)
+        self._tracking_toggle = QCheckBox("Tracking")
+        self._tracking_toggle.setChecked(int(self._values.get("ui_tracking_enabled", 1)) > 0)
+        self._hands_toggle = QCheckBox("Hands")
+        self._hands_toggle.setChecked(int(self._values.get("ui_hands_enabled", 1)) > 0)
+        self._mic_toggle = QCheckBox("Mic")
+        self._mic_toggle.setChecked(int(self._values.get("ui_mic_enabled", 1)) > 0)
+        toggles_row.addWidget(self._tracking_toggle)
+        toggles_row.addWidget(self._hands_toggle)
+        toggles_row.addWidget(self._mic_toggle)
+        left_layout.addLayout(toggles_row)
 
         self._footer_label = QLabel("")
         left_layout.addWidget(self._footer_label)
@@ -254,7 +270,12 @@ class QtLayoutControls:
         return QPixmap.fromImage(image.copy())
 
     def read_values(self, _limits: dict[str, tuple[int, int]]) -> dict[str, int]:
-        return {key: int(value) for key, value in self._values.items() if key in TRACKBARS}
+        values = {key: int(value) for key, value in self._values.items() if key in TRACKBARS}
+        values["ui_show_points"] = 1 if self.is_points_preview_enabled() else 0
+        values["ui_tracking_enabled"] = 1 if self.is_tracking_enabled() else 0
+        values["ui_hands_enabled"] = 1 if self.is_hands_enabled() else 0
+        values["ui_mic_enabled"] = 1 if self.is_mic_enabled() else 0
+        return values
 
     def draw_overlay(self, current_layout: dict[str, LayoutValue]):
         self._values.update(current_layout)
@@ -270,7 +291,12 @@ class QtLayoutControls:
                     Qt.SmoothTransformation,
                 )
             )
-        if self._points_label is not None and self._points_toggle is not None and self._points_toggle.isChecked():
+        if (
+            points_frame is not None
+            and self._points_label is not None
+            and self._points_toggle is not None
+            and self._points_toggle.isChecked()
+        ):
             self._points_label.setPixmap(
                 self._to_pixmap(points_frame).scaled(
                     self._points_label.size(),
@@ -278,6 +304,9 @@ class QtLayoutControls:
                     Qt.SmoothTransformation,
                 )
             )
+        elif self._points_label is not None:
+            self._points_label.setText("Points preview disabled")
+            self._points_label.setPixmap(QPixmap())
 
     def pop_action(self, name: str) -> bool:
         value = self._action_events.get(name, False)
@@ -302,3 +331,15 @@ class QtLayoutControls:
         if self._window is not None:
             self._window.close()
             self._window = None
+
+    def is_tracking_enabled(self) -> bool:
+        return bool(self._tracking_toggle.isChecked()) if self._tracking_toggle is not None else True
+
+    def is_hands_enabled(self) -> bool:
+        return bool(self._hands_toggle.isChecked()) if self._hands_toggle is not None else True
+
+    def is_mic_enabled(self) -> bool:
+        return bool(self._mic_toggle.isChecked()) if self._mic_toggle is not None else True
+
+    def is_points_preview_enabled(self) -> bool:
+        return bool(self._points_toggle.isChecked()) if self._points_toggle is not None else True

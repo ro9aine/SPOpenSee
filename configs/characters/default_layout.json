@@ -58,7 +58,7 @@
   "mouth_right_x": 35,
   "mouth_right_y": 0,
   "speech_active": 0,
-  "speech_energy": 3,
+  "speech_energy": 2,
   "mic_enabled": 1,
   "mic_threshold": 8,
   "mic_gain": 200,
@@ -78,5 +78,9 @@
   "mask_right": 0,
   "mask_top": 0,
   "mask_bottom": 0,
+  "ui_show_points": 0,
+  "ui_tracking_enabled": 1,
+  "ui_hands_enabled": 0,
+  "ui_mic_enabled": 1,
   "bg_image_path": "C:/Users/user/Desktop/fghjkjhgfd.png"
 }
