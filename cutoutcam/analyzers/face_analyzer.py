@@ -1,22 +1,22 @@
 import math
-from typing import NewType
+from typing import Any, TypeAlias
 
 from opensee.tracker import FaceInfo
 
 from ..state import BState, EState, EmotionState, FState, FaceState, MState, RState
 
 
-LeftEyeState = NewType("LeftEyeState", EState)
-RightEyeState = NewType("RightEyeState", EState)
-LeftBrowState = NewType("LeftBrowState", BState)
-RightBrowState = NewType("RightBrowState", BState)
+LeftEyeState: TypeAlias = EState
+RightEyeState: TypeAlias = EState
+LeftBrowState: TypeAlias = BState
+RightBrowState: TypeAlias = BState
 
 
-def _dist(p1, p2):
+def _dist(p1: Any, p2: Any) -> float:
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
 
 
-def _eye_aspect_ratio(eye):
+def _eye_aspect_ratio(eye: list[Any]) -> float:
     """
     eye = list of 6 (x,y) points
     """
@@ -29,25 +29,30 @@ def _eye_aspect_ratio(eye):
 
 
 class Analizer:
-    def analyze(self, face: FaceInfo):
-        self._nose = self._get_nose_state(face)
+    def __init__(self) -> None:
+        self._nose = FState.CENTER
+
+    def analyze(self, face: FaceInfo) -> None:
+        self._nose = self.find_turn_state(face)
 
     def find_all(self, face: FaceInfo) -> FaceState:
         state = FaceState()
         state.turn = self.find_turn_state(face)
-        left, right = self.find_eyes_state(face)
-        state.left_eye = left
-        state.right_eye = right
+        left_eye, right_eye = self.find_eyes_state(face)
+        state.left_eye = left_eye
+        state.right_eye = right_eye
         state.mouth = self.find_mouth_state(face)
         # state.emotion = self.find_emotion_state(face)
-        left, right = self.find_brows_state(face)
-        state.left_brow = left
-        state.right_brow = right
+        left_brow, right_brow = self.find_brows_state(face)
+        state.left_brow = left_brow
+        state.right_brow = right_brow
         state.rotation = self.find_rotation_state(face)
         return state
 
     def find_rotation_state(self, face: FaceInfo) -> RState:
         lm = face.lms
+        if lm is None:
+            return RState.NORMAL
 
         if len(lm) < 48:
             return RState.NORMAL
@@ -83,6 +88,8 @@ class Analizer:
 
     def find_turn_state(self, face: FaceInfo) -> FState:
         lm = face.lms
+        if lm is None or len(lm) <= 30:
+            return FState.CENTER
 
         xs = [p[1] for p in lm]
         ys = [p[0] for p in lm]
@@ -127,6 +134,8 @@ class Analizer:
 
     def find_eyes_state(self, face: FaceInfo) -> tuple[LeftEyeState, RightEyeState]:
         lm = face.lms
+        if lm is None or len(lm) < 48:
+            return EState.OPEN, EState.OPEN
 
         left_eye_pts = [lm[i] for i in range(36, 42)]
         right_eye_pts = [lm[i] for i in range(42, 48)]
@@ -144,8 +153,10 @@ class Analizer:
     def find_mouth_state(self, face: FaceInfo) -> MState:
         lm = face.lms
 
-        def dist(p1, p2):
+        def dist(p1: Any, p2: Any) -> float:
             return ((p1[1] - p2[1]) ** 2 + (p1[0] - p2[0]) ** 2) ** 0.5
+        if lm is None or len(lm) <= 62:
+            return MState.CLOSED
 
         top_outer = lm[51]
         bottom_outer = lm[55]
@@ -194,12 +205,14 @@ class Analizer:
         return MState.CLOSED
 
     def find_emotion_state(self, face: FaceInfo) -> EmotionState:
-        ...
+        return EmotionState.NEUTRAL
 
     def find_brows_state(self, face: FaceInfo) -> tuple[LeftBrowState, RightBrowState]:
         lm = face.lms
+        if lm is None or len(lm) < 45:
+            return BState.MIDDLE, BState.MIDDLE
 
-        def avg_y(indices):
+        def avg_y(indices: range | list[int]) -> float:
             return sum(lm[i][0] for i in indices) / len(indices)
 
         left_brow_indices = range(17, 22)
@@ -228,7 +241,7 @@ class Analizer:
         up_thresh = 0.155
         down_thresh = 0.105
 
-        def classify(ratio):
+        def classify(ratio: float) -> BState:
             if ratio > up_thresh:
                 return BState.UP
             if ratio < down_thresh:

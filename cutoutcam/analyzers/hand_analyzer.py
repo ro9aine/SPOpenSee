@@ -1,17 +1,29 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from ..state import FaceState
 
-try:
-    import cv2
-    import mediapipe as mp
-except ImportError:
-    cv2 = None
-    mp = None
+cv2: Any = None
+mp: Any = None
+mp_hands_module: Any = None
 
-from mediapipe.python.solutions import hands as mp_hands_module
+try:
+    import cv2 as _cv2
+    import mediapipe as _mp
+except ImportError:
+    pass
+else:
+    cv2 = _cv2
+    mp = _mp
+
+try:
+    from mediapipe.python.solutions import hands as _mp_hands_module
+except ImportError:
+    pass
+else:
+    mp_hands_module = _mp_hands_module
 
 
 class HandAnalyzer:
@@ -22,8 +34,8 @@ class HandAnalyzer:
         min_tracking_confidence: float = 0.5,
     ):
         self.available = mp is not None and cv2 is not None
-        self._hands = None
-        self._mp_hands = None
+        self._hands: Any | None = None
+        self._mp_hands: Any | None = None
 
         if not self.available:
             return
@@ -48,7 +60,7 @@ class HandAnalyzer:
             self._hands.close()
             self._hands = None
 
-    def enrich_state(self, frame_bgr, state: FaceState) -> FaceState:
+    def enrich_state(self, frame_bgr: Any, state: FaceState) -> FaceState:
         if not self.available or self._hands is None:
             return state
 
@@ -66,6 +78,8 @@ class HandAnalyzer:
 
         unlabeled_points: list[tuple[float, float]] = []
         for idx, hand_landmarks in enumerate(hands):
+            if self._mp_hands is None:
+                continue
             wrist = hand_landmarks.landmark[self._mp_hands.HandLandmark.WRIST]
             index_mcp = hand_landmarks.landmark[self._mp_hands.HandLandmark.INDEX_FINGER_MCP]
             pinky_mcp = hand_landmarks.landmark[self._mp_hands.HandLandmark.PINKY_MCP]
@@ -98,8 +112,8 @@ class HandAnalyzer:
 
         return replace(
             state,
-            left_hand_visible=left_visible,
-            right_hand_visible=right_visible,
+            left_arm_visible=left_visible,
+            right_arm_visible=right_visible,
             left_hand_x=left_x,
             left_hand_y=left_y,
             right_hand_x=right_x,

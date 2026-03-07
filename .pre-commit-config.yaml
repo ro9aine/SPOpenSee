@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args: ["--jobs", "1", "main.py", "cutoutcam", "tests"]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: poetry run mypy
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest -q tests
+        language: system
+        pass_filenames: false

@@ -1,5 +1,6 @@
 from pathlib import Path
 from collections import deque
+from typing import Mapping, cast
 
 import cv2
 import numpy as np
@@ -93,7 +94,7 @@ class CharacterGenerator:
             "mask_bottom": 0,
         }
 
-    def set_layout(self, values: dict[str, int]) -> None:
+    def set_layout(self, values: Mapping[str, int | str]) -> None:
         for key, value in values.items():
             if key in self.layout:
                 self.layout[key] = int(value)
@@ -539,16 +540,24 @@ class CharacterGenerator:
         if state.left_arm_visible:
             if abs(left_elbow[0] - left_shoulder[0]) + abs(left_elbow[1] - left_shoulder[1]) < 8:
                 left_elbow = self._fallback_elbow(left_shoulder, left_hand, -1)
-            self._overlay_segment_part(canvas, self._arm_part, left_shoulder, left_elbow, arm_width_scale, mirror_x=False)
-            self._overlay_segment_part(canvas, self._arm_part, left_elbow, left_hand, arm_width_scale, mirror_x=False)
+            self._overlay_segment_part(
+                canvas, self._arm_part, left_shoulder, left_elbow, arm_width_scale, mirror_x=False
+            )
+            self._overlay_segment_part(
+                canvas, self._arm_part, left_elbow, left_hand, arm_width_scale, mirror_x=False
+            )
             self._overlay_joint_part(canvas, self._shoulder_part, left_shoulder, joint_scale, mirror_x=False)
             self._overlay_joint_part(canvas, self._hand_part, left_hand, joint_scale, mirror_x=False)
 
         if state.right_arm_visible:
             if abs(right_elbow[0] - right_shoulder[0]) + abs(right_elbow[1] - right_shoulder[1]) < 8:
                 right_elbow = self._fallback_elbow(right_shoulder, right_hand, 1)
-            self._overlay_segment_part(canvas, self._arm_part, right_shoulder, right_elbow, arm_width_scale, mirror_x=True)
-            self._overlay_segment_part(canvas, self._arm_part, right_elbow, right_hand, arm_width_scale, mirror_x=True)
+            self._overlay_segment_part(
+                canvas, self._arm_part, right_shoulder, right_elbow, arm_width_scale, mirror_x=True
+            )
+            self._overlay_segment_part(
+                canvas, self._arm_part, right_elbow, right_hand, arm_width_scale, mirror_x=True
+            )
             self._overlay_joint_part(canvas, self._shoulder_part, right_shoulder, joint_scale, mirror_x=True)
             self._overlay_joint_part(canvas, self._hand_part, right_hand, joint_scale, mirror_x=True)
 
@@ -634,7 +643,13 @@ class CharacterGenerator:
         unified_brow_state = self._merged_brow_state(state.left_brow, state.right_brow)
         brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + self.layout["brow_y"]
         left_brow_x = eyes_x + int(eyes_white.shape[1] * 0.02) + self.layout["brow_x"]
-        right_brow_x = eyes_x + eyes_white.shape[1] - right_brow.shape[1] - int(eyes_white.shape[1] * 0.02) - self.layout["brow_x"]
+        right_brow_x = (
+            eyes_x
+            + eyes_white.shape[1]
+            - right_brow.shape[1]
+            - int(eyes_white.shape[1] * 0.02)
+            - self.layout["brow_x"]
+        )
         self._overlay_rgba(
             head_layer,
             brow,
@@ -693,7 +708,10 @@ class CharacterGenerator:
                 6: mouth_talk_6,
                 7: mouth_talk_7,
             }
-            mouth = mouth_map.get(mouth_idx, mouth_open)
+            mouth = mouth_map.get(
+                mouth_idx,
+                mouth_open,
+            )
 
         mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx
         mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
@@ -707,14 +725,14 @@ class CharacterGenerator:
         if abs(angle) > 1e-6:
             center = (head_x + head.shape[1] // 2, head_y + head.shape[0] // 2)
             matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-            head_layer = cv2.warpAffine(
+            head_layer = cast(np.ndarray, cv2.warpAffine(
                 head_layer,
                 matrix,
                 (self.width, self.height),
                 flags=cv2.INTER_LINEAR,
                 borderMode=cv2.BORDER_CONSTANT,
                 borderValue=(0, 0, 0, 0),
-            )
+            ))
 
         self._overlay_rgba(canvas, head_layer, 0, 0)
         mask = np.maximum(mask, head_layer[:, :, 3])

@@ -30,6 +30,15 @@ poetry run python main.py --disable-mic
 poetry run python main.py --disable-hands --disable-mic
 ```
 
+Checks:
+
+```powershell
+poetry run flake8 main.py cutoutcam tests --jobs 1
+poetry run mypy
+poetry run pytest -q
+poetry run pre-commit install
+```
+
 Alternative:
 
 ```powershell
