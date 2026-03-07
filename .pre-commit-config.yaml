@@ -16,3 +16,8 @@ repos:
         entry: poetry run pytest -q tests
         language: system
         pass_filenames: false
+      - id: commit-message
+        name: commit message
+        entry: poetry run python scripts/dev/validate_commit_msg.py
+        language: system
+        stages: [commit-msg]
