@@ -17,7 +17,9 @@ class CharacterGenerator:
 
         self._body = self._load_part("body.png")
         self._head = self._load_part("head.png")
+        self._head_45 = self._load_part("head-45.png")
         self._haircut = self._load_part("haircut.png")
+        self._haircut_45 = self._load_part("haircut-45.png")
         self._eyes_white = self._load_part("white-of-the-eyes.png")
         self._closed_eyes = self._load_part("closed-eyes.png")
         self._pupil = self._load_part("pupil.png")
@@ -56,9 +58,15 @@ class CharacterGenerator:
             "head_scale": 62,
             "head_x": 0,
             "head_y": 0,
+            "head_45_scale": 100,
+            "head_45_x": 0,
+            "head_45_y": 0,
             "hair_scale": 100,
             "hair_x": 0,
             "hair_y": 0,
+            "hair_45_scale": 100,
+            "hair_45_x": 0,
+            "hair_45_y": 0,
             "eyes_scale": 55,
             "eyes_x": 0,
             "eyes_y": 0,
@@ -212,6 +220,26 @@ class CharacterGenerator:
         if left == BState.UP or right == BState.UP:
             return BState.UP
         return BState.MIDDLE
+
+    @staticmethod
+    def _uses_side_head(turn: FState) -> bool:
+        return turn in {
+            FState.LEFT,
+            FState.RIGHT,
+            FState.UP_LEFT,
+            FState.UP_RIGHT,
+            FState.DOWN_LEFT,
+            FState.DOWN_RIGHT,
+        }
+
+    def _select_head_parts(self, turn: FState) -> tuple[np.ndarray, np.ndarray, bool]:
+        if not self._uses_side_head(turn):
+            return self._head, self._haircut, False
+
+        if turn in {FState.RIGHT, FState.UP_RIGHT, FState.DOWN_RIGHT}:
+            return cv2.flip(self._head_45, 1), cv2.flip(self._haircut_45, 1), True
+
+        return self._head_45, self._haircut_45, True
 
     def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
@@ -574,8 +602,23 @@ class CharacterGenerator:
         mask = np.zeros((self.height, self.width), dtype=np.uint8)
 
         body = self._resized(self._body, max(40, int(self.width * self.layout["body_scale"] / 100)))
-        head = self._resized(self._head, max(40, int(self.width * self.layout["head_scale"] / 100)))
-        hair = self._resized(self._haircut, max(10, int(head.shape[1] * self.layout["hair_scale"] / 100)))
+        head_part, hair_part, use_side_head = self._select_head_parts(state.turn)
+        head_scale = self.layout["head_scale"]
+        hair_scale = self.layout["hair_scale"]
+        head_offset_x = self.layout["head_x"]
+        head_offset_y = self.layout["head_y"]
+        hair_offset_x = self.layout["hair_x"]
+        hair_offset_y = self.layout["hair_y"]
+        if use_side_head:
+            head_scale = int(head_scale * self.layout["head_45_scale"] / 100)
+            hair_scale = int(hair_scale * self.layout["hair_45_scale"] / 100)
+            head_offset_x += self.layout["head_45_x"]
+            head_offset_y += self.layout["head_45_y"]
+            hair_offset_x += self.layout["hair_45_x"]
+            hair_offset_y += self.layout["hair_45_y"]
+
+        head = self._resized(head_part, max(40, int(self.width * head_scale / 100)))
+        hair = self._resized(hair_part, max(10, int(head.shape[1] * hair_scale / 100)))
         eyes_white = self._resized(self._eyes_white, max(10, int(head.shape[1] * self.layout["eyes_scale"] / 100)))
         closed_eyes = self._resized(
             self._closed_eyes,
@@ -632,8 +675,8 @@ class CharacterGenerator:
         mask = np.maximum(mask, body_layer[:, :, 3])
 
         head_layer = np.zeros_like(canvas)
-        head_x = (self.width - head.shape[1]) // 2 + self.layout["head_x"]
-        head_y = int(self.height * 0.12) + self.layout["head_y"]
+        head_x = (self.width - head.shape[1]) // 2 + head_offset_x
+        head_y = int(self.height * 0.12) + head_offset_y
         self._overlay_rgba(head_layer, head, head_x, head_y)
 
         eyes_x = head_x + int(head.shape[1] * 0.23) + self.layout["eyes_x"]
@@ -717,8 +760,8 @@ class CharacterGenerator:
         mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
         self._overlay_rgba(head_layer, mouth, mouth_x, mouth_y)
 
-        hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + self.layout["hair_x"]
-        hair_y = head_y - int(head.shape[0] * 0.06) + self.layout["hair_y"]
+        hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + hair_offset_x
+        hair_y = head_y - int(head.shape[0] * 0.06) + hair_offset_y
         self._overlay_rgba(head_layer, hair, hair_x, hair_y)
 
         angle = self._rotation_angle(state.rotation)

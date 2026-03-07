@@ -24,9 +24,15 @@ TRACKBARS = {
     "head_scale": (62, 20, 120),
     "head_x": (0, -200, 200),
     "head_y": (0, -200, 200),
+    "head_45_scale": (100, 40, 180),
+    "head_45_x": (0, -200, 200),
+    "head_45_y": (0, -200, 200),
     "hair_scale": (100, 20, 200),
     "hair_x": (0, -200, 200),
     "hair_y": (0, -200, 200),
+    "hair_45_scale": (100, 40, 180),
+    "hair_45_x": (0, -200, 200),
+    "hair_45_y": (0, -200, 200),
     "eyes_scale": (55, 20, 200),
     "eyes_x": (0, -150, 150),
     "eyes_y": (0, -150, 150),
@@ -67,6 +73,70 @@ TRACKBARS = {
     "mask_bottom": (0, 0, 90),
 }
 
+TRACKBAR_LABELS = {
+    "body_scale": "body scale",
+    "body_x": "body x",
+    "body_y": "body y",
+    "hand_enabled": "hands on",
+    "hand_mirror_x": "mirror hands x",
+    "hand_size": "hand size",
+    "hand_x": "hand x",
+    "hand_y": "hand y",
+    "hand_range_x": "hand range x",
+    "hand_range_y": "hand range y",
+    "hand_shoulder_y": "shoulder y",
+    "head_scale": "head scale",
+    "head_x": "head x",
+    "head_y": "head y",
+    "head_45_scale": "side head scale",
+    "head_45_x": "side head x",
+    "head_45_y": "side head y",
+    "hair_scale": "hair scale",
+    "hair_x": "hair x",
+    "hair_y": "hair y",
+    "hair_45_scale": "side hair scale",
+    "hair_45_x": "side hair x",
+    "hair_45_y": "side hair y",
+    "eyes_scale": "eyes scale",
+    "eyes_x": "eyes x",
+    "eyes_y": "eyes y",
+    "pupil_scale": "pupil scale",
+    "pupil_x": "pupil x",
+    "pupil_y": "pupil y",
+    "turn_amp_x": "turn amp x",
+    "turn_amp_y": "turn amp y",
+    "closed_eyes_scale": "closed eyes scale",
+    "closed_eyes_x": "closed eyes x",
+    "closed_eyes_y": "closed eyes y",
+    "brow_scale": "brow scale",
+    "brow_x": "brow x",
+    "brow_y": "brow y",
+    "mouth_scale": "mouth scale",
+    "mouth_x": "mouth x",
+    "mouth_y": "mouth y",
+    "speech_active": "speech active",
+    "speech_energy": "speech energy",
+    "mic_enabled": "mic enabled",
+    "mic_threshold": "mic threshold",
+    "mic_gain": "mic gain",
+    "bg_mode": "bg mode",
+    "bg_r1": "bg r1",
+    "bg_g1": "bg g1",
+    "bg_b1": "bg b1",
+    "bg_r2": "bg r2",
+    "bg_g2": "bg g2",
+    "bg_b2": "bg b2",
+    "bg_center_x": "bg center x",
+    "bg_center_y": "bg center y",
+    "bg_scale": "bg scale",
+    "bg_x": "bg x",
+    "bg_y": "bg y",
+    "mask_left": "mask left",
+    "mask_right": "mask right",
+    "mask_top": "mask top",
+    "mask_bottom": "mask bottom",
+}
+
 TRACKBAR_PAGES = [
     [
         "body_scale",
@@ -86,6 +156,14 @@ TRACKBAR_PAGES = [
         "hair_scale",
         "hair_x",
         "hair_y",
+    ],
+    [
+        "head_45_scale",
+        "head_45_x",
+        "head_45_y",
+        "hair_45_scale",
+        "hair_45_x",
+        "hair_45_y",
     ],
     [
         "eyes_scale",
@@ -131,12 +209,12 @@ TRACKBAR_PAGES = [
 ]
 
 ACTION_BUTTONS = {
-    "page_prev": ((20, 20), (100, 70), "Prev"),
-    "page_next": ((110, 20), (190, 70), "Next"),
-    "save": ((210, 20), (290, 70), "Save"),
-    "quit": ((300, 20), (380, 70), "Quit"),
-    "pick_bg": ((20, 75), (200, 120), "Pick BG"),
-    "clear_bg": ((210, 75), (380, 120), "Clear BG"),
+    "page_prev": ((20, 16), (145, 56), "Prev"),
+    "page_next": ((165, 16), (290, 56), "Next"),
+    "save": ((310, 16), (435, 56), "Save"),
+    "quit": ((455, 16), (580, 56), "Quit"),
+    "pick_bg": ((20, 66), (290, 106), "Pick BG"),
+    "clear_bg": ((310, 66), (580, 106), "Clear BG"),
 }
 
 BG_MODE_LABELS = {
@@ -149,10 +227,11 @@ BG_MODE_LABELS = {
 
 PAGE_LABELS = {
     0: "Page 1: Body and Hands",
-    1: "Page 2: Eyes",
-    2: "Page 3: Face Features",
-    3: "Page 4: Background",
-    4: "Page 5: Mask",
+    1: "Page 2: Side Head",
+    2: "Page 3: Eyes",
+    3: "Page 4: Face Features",
+    4: "Page 5: Background",
+    5: "Page 6: Mask",
 }
 
 
@@ -160,6 +239,7 @@ class LayoutControls:
     def __init__(self):
         self.current_page = 0
         self._action_events = {key: False for key in ACTION_BUTTONS}
+        self._trackbar_names: dict[str, str] = {}
 
     @staticmethod
     def load_settings(path: Path) -> dict[str, LayoutValue]:
@@ -235,33 +315,36 @@ class LayoutControls:
         except cv2.error:
             pass
         cv2.namedWindow(CONTROL_WINDOW, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(CONTROL_WINDOW, 560, 690)
+        cv2.resizeWindow(CONTROL_WINDOW, 760, 740)
         cv2.setMouseCallback(CONTROL_WINDOW, self._on_controls_click)
 
         limits: dict[str, tuple[int, int]] = {}
+        self._trackbar_names = {}
         for key in TRACKBAR_PAGES[self.current_page]:
             default, low, high = TRACKBARS[key]
             initial = initial_values.get(key, default)
             initial_int = int(initial)
-            cv2.createTrackbar(key, CONTROL_WINDOW, initial_int - low, high - low, self._noop)
+            label = TRACKBAR_LABELS.get(key, key.replace("_", " "))
+            self._trackbar_names[key] = label
+            cv2.createTrackbar(label, CONTROL_WINDOW, initial_int - low, high - low, self._noop)
             limits[key] = (low, high)
         return limits
 
-    @staticmethod
-    def read_values(limits: dict[str, tuple[int, int]]) -> dict[str, int]:
+    def read_values(self, limits: dict[str, tuple[int, int]]) -> dict[str, int]:
         values: dict[str, int] = {}
         for key, (low, _high) in limits.items():
-            values[key] = cv2.getTrackbarPos(key, CONTROL_WINDOW) + low
+            label = self._trackbar_names.get(key, TRACKBAR_LABELS.get(key, key.replace("_", " ")))
+            values[key] = cv2.getTrackbarPos(label, CONTROL_WINDOW) + low
         return values
 
     def draw_overlay(self, current_layout: dict[str, LayoutValue]) -> np.ndarray:
-        image = np.full((145, 400, 3), 238, dtype=np.uint8)
+        image = np.full((136, 620, 3), 238, dtype=np.uint8)
         mode = int(current_layout.get("bg_mode", 0))
         mode_label = BG_MODE_LABELS.get(mode, f"Mode {mode}")
         cv2.putText(
             image,
             f"Background: {mode_label}",
-            (12, 137),
+            (12, 128),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
             (60, 60, 60),
@@ -272,7 +355,7 @@ class LayoutControls:
         cv2.putText(
             image,
             page_name,
-            (210, 137),
+            (200, 128),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
             (60, 60, 60),
@@ -292,12 +375,15 @@ class LayoutControls:
                 fill = (70, 160, 90)
             cv2.rectangle(image, (x0, y0), (x1, y1), fill, thickness=-1)
             cv2.rectangle(image, (x0, y0), (x1, y1), (40, 40, 40), thickness=1)
+            (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.62, 2)
+            text_x = x0 + max(0, ((x1 - x0) - text_w) // 2)
+            text_y = y0 + max(text_h, ((y1 - y0) + text_h) // 2) - max(0, baseline // 2)
             cv2.putText(
                 image,
                 label,
-                (x0 + 14, y0 + 33),
+                (text_x, text_y),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.65,
+                0.62,
                 (255, 255, 255),
                 2,
                 cv2.LINE_AA,
