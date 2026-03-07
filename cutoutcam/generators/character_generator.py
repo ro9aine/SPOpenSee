@@ -5,7 +5,7 @@ from typing import Mapping, cast
 import cv2
 import numpy as np
 
-from ..state import BState, EState, FState, FaceState, MState, RState
+from ..state import BState, EState, EmotionState, FState, FaceState, MState, RState
 
 
 class CharacterGenerator:
@@ -262,6 +262,38 @@ class CharacterGenerator:
     @staticmethod
     def _is_right_side_turn(turn: FState) -> bool:
         return turn in {FState.RIGHT, FState.UP_RIGHT, FState.DOWN_RIGHT}
+
+    @staticmethod
+    def _eye_pair_scale(turn: FState) -> tuple[float, float]:
+        if turn in {FState.LEFT, FState.UP_LEFT, FState.DOWN_LEFT}:
+            return 0.95, 1.0
+        if turn in {FState.RIGHT, FState.UP_RIGHT, FState.DOWN_RIGHT}:
+            return 1.0, 0.95
+        return 1.0, 1.0
+
+    @staticmethod
+    def _split_eye_pair(img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        mid = img.shape[1] // 2
+        return img[:, :mid].copy(), img[:, mid:].copy()
+
+    @staticmethod
+    def _apply_smile_eye_shape(img: np.ndarray) -> np.ndarray:
+        shaped = img.copy()
+        h, w = shaped.shape[:2]
+        if h <= 1 or w <= 1:
+            return shaped
+
+        x_coords = np.linspace(-1.0, 1.0, w, dtype=np.float32)
+        cutoff = h * (0.90 - 0.10 * (1.0 - np.square(x_coords)))
+        y_coords = np.arange(h, dtype=np.float32)[:, None]
+        mask = (y_coords <= cutoff[None, :]).astype(np.uint8) * 255
+        mask = cast(
+            np.ndarray,
+            cv2.GaussianBlur(mask, (0, 0), sigmaX=max(0.8, w / 22.0), sigmaY=max(0.8, h / 18.0)),
+        )
+        alpha = shaped[:, :, 3].astype(np.float32) * (mask.astype(np.float32) / 255.0)
+        shaped[:, :, 3] = alpha.astype(np.uint8)
+        return shaped
 
     def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
@@ -716,7 +748,6 @@ class CharacterGenerator:
 
         eyes_x = head_x + int(head.shape[1] * 0.23) + eyes_offset_x
         eyes_y = head_y + int(head.shape[0] * 0.38) + eyes_offset_y
-        closed_eyes_x = eyes_x + (eyes_white.shape[1] - closed_eyes.shape[1]) // 2 + self.layout["closed_eyes_x"]
         closed_eyes_y = eyes_y + (eyes_white.shape[0] - closed_eyes.shape[0]) // 2 + self.layout["closed_eyes_y"]
         unified_brow_state = self._merged_brow_state(state.left_brow, state.right_brow)
         brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + brow_offset_y
@@ -750,25 +781,61 @@ class CharacterGenerator:
         left_eye_cx = eyes_x + int(eyes_white.shape[1] * 0.27)
         right_eye_cx = eyes_x + int(eyes_white.shape[1] * 0.73)
         eye_cy = eyes_y + int(eyes_white.shape[0] * 0.48)
+        left_eye_scale, right_eye_scale = self._eye_pair_scale(state.turn)
+        open_left_eye, open_right_eye = self._split_eye_pair(eyes_white)
+        closed_left_eye, closed_right_eye = self._split_eye_pair(closed_eyes)
 
         if state.left_eye == EState.CLOSED or state.right_eye == EState.CLOSED:
-            self._overlay_rgba(head_layer, closed_eyes, closed_eyes_x, closed_eyes_y)
-        else:
-            self._overlay_rgba(head_layer, eyes_white, eyes_x, eyes_y)
-
-            pupil_w = pupil.shape[1]
-            pupil_h = pupil.shape[0]
+            left_closed = self._resized(closed_left_eye, max(4, int(closed_left_eye.shape[1] * left_eye_scale)))
+            right_closed = self._resized(closed_right_eye, max(4, int(closed_right_eye.shape[1] * right_eye_scale)))
+            closed_eye_y = closed_eyes_y + closed_eyes.shape[0] // 2
             self._overlay_rgba(
                 head_layer,
-                pupil,
-                left_eye_cx - pupil_w // 2 + turn_dx // 2 + self.layout["pupil_x"],
-                eye_cy - pupil_h // 2 + turn_dy // 2 + self.layout["pupil_y"],
+                left_closed,
+                left_eye_cx - left_closed.shape[1] // 2,
+                closed_eye_y - left_closed.shape[0] // 2,
             )
             self._overlay_rgba(
                 head_layer,
-                pupil,
-                right_eye_cx - pupil_w // 2 + turn_dx // 2 + self.layout["pupil_x"],
-                eye_cy - pupil_h // 2 + turn_dy // 2 + self.layout["pupil_y"],
+                right_closed,
+                right_eye_cx - right_closed.shape[1] // 2,
+                closed_eye_y - right_closed.shape[0] // 2,
+            )
+        else:
+            left_open = self._resized(open_left_eye, max(4, int(open_left_eye.shape[1] * left_eye_scale)))
+            right_open = self._resized(open_right_eye, max(4, int(open_right_eye.shape[1] * right_eye_scale)))
+            if state.emotion == EmotionState.HAPPY:
+                left_open = self._apply_smile_eye_shape(left_open)
+                right_open = self._apply_smile_eye_shape(right_open)
+            self._overlay_rgba(
+                head_layer,
+                left_open,
+                left_eye_cx - left_open.shape[1] // 2,
+                eye_cy - left_open.shape[0] // 2,
+            )
+            self._overlay_rgba(
+                head_layer,
+                right_open,
+                right_eye_cx - right_open.shape[1] // 2,
+                eye_cy - right_open.shape[0] // 2,
+            )
+
+            left_pupil = self._resized(pupil, max(2, int(pupil.shape[1] * left_eye_scale)))
+            right_pupil = self._resized(pupil, max(2, int(pupil.shape[1] * right_eye_scale)))
+            if state.emotion == EmotionState.HAPPY:
+                left_pupil = self._apply_smile_eye_shape(left_pupil)
+                right_pupil = self._apply_smile_eye_shape(right_pupil)
+            self._overlay_rgba(
+                head_layer,
+                left_pupil,
+                left_eye_cx - left_pupil.shape[1] // 2 + turn_dx // 2 + self.layout["pupil_x"],
+                eye_cy - left_pupil.shape[0] // 2 + turn_dy // 2 + self.layout["pupil_y"],
+            )
+            self._overlay_rgba(
+                head_layer,
+                right_pupil,
+                right_eye_cx - right_pupil.shape[1] // 2 + turn_dx // 2 + self.layout["pupil_x"],
+                eye_cy - right_pupil.shape[0] // 2 + turn_dy // 2 + self.layout["pupil_y"],
             )
 
         if state.mouth == MState.CLOSED:

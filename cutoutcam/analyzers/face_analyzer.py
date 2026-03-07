@@ -31,6 +31,7 @@ def _eye_aspect_ratio(eye: list[Any]) -> float:
 class Analizer:
     def __init__(self) -> None:
         self._nose = FState.CENTER
+        self._emotion = EmotionState.NEUTRAL
 
     def analyze(self, face: FaceInfo) -> None:
         self._nose = self.find_turn_state(face)
@@ -42,7 +43,7 @@ class Analizer:
         state.left_eye = left_eye
         state.right_eye = right_eye
         state.mouth = self.find_mouth_state(face)
-        # state.emotion = self.find_emotion_state(face)
+        state.emotion = self.find_emotion_state(face)
         left_brow, right_brow = self.find_brows_state(face)
         state.left_brow = left_brow
         state.right_brow = right_brow
@@ -207,7 +208,41 @@ class Analizer:
         return MState.CLOSED
 
     def find_emotion_state(self, face: FaceInfo) -> EmotionState:
-        return EmotionState.NEUTRAL
+        lm = face.lms
+        if lm is None or len(lm) <= 62:
+            return EmotionState.NEUTRAL
+
+        def dist(p1: Any, p2: Any) -> float:
+            return ((p1[1] - p2[1]) ** 2 + (p1[0] - p2[0]) ** 2) ** 0.5
+
+        top_outer = lm[51]
+        bottom_outer = lm[55]
+        left_corner = lm[58]
+        right_corner = lm[62]
+
+        xs = [p[1] for p in lm]
+        ys = [p[0] for p in lm]
+        face_width = max(xs) - min(xs)
+        face_height = max(ys) - min(ys)
+        if face_width <= 1 or face_height <= 1:
+            return EmotionState.NEUTRAL
+
+        mouth_center_y = (top_outer[0] + bottom_outer[0]) / 2.0
+        avg_corner_y = (left_corner[0] + right_corner[0]) / 2.0
+        corner_lift = mouth_center_y - avg_corner_y
+        mouth_width_ratio = dist(left_corner, right_corner) / face_width
+
+        corner_ratio = corner_lift / face_height
+        smile_on = corner_ratio > 0.05 and mouth_width_ratio > 0.38
+        smile_off = corner_ratio < 0.03 or mouth_width_ratio < 0.34
+
+        if self._emotion == EmotionState.HAPPY:
+            if smile_off:
+                self._emotion = EmotionState.NEUTRAL
+        elif smile_on:
+            self._emotion = EmotionState.HAPPY
+
+        return self._emotion
 
     def find_brows_state(self, face: FaceInfo) -> tuple[LeftBrowState, RightBrowState]:
         lm = face.lms

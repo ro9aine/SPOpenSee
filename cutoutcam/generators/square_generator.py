@@ -42,22 +42,63 @@ class SquareGenerator:
         }
         return mapping.get(rotation, 0.0)
 
-    def _draw_eye(self, canvas: np.ndarray, center: tuple[int, int], state: EState):
+    def _eye_scale(self, turn: FState) -> tuple[float, float]:
+        if turn in {FState.LEFT, FState.UP_LEFT, FState.DOWN_LEFT}:
+            return 1.0, 0.72
+        if turn in {FState.RIGHT, FState.UP_RIGHT, FState.DOWN_RIGHT}:
+            return 0.72, 1.0
+        return 1.0, 1.0
+
+    def _draw_eye(
+        self,
+        canvas: np.ndarray,
+        center: tuple[int, int],
+        state: EState,
+        scale: float = 1.0,
+        emotion: EmotionState = EmotionState.NEUTRAL,
+    ):
         cx, cy = center
+        half_w = max(8, int(18 * scale))
+        half_h = max(4, int(14 * scale))
+        pupil_r = max(3, int(5 * scale))
 
         if state == EState.CLOSED:
-            cv2.line(canvas, (cx - 18, cy), (cx + 18, cy), self.fg_color, 3)
+            cv2.line(canvas, (cx - half_w, cy), (cx + half_w, cy), self.fg_color, 3)
             return
 
         if state == EState.HALF:
-            cv2.rectangle(canvas, (cx - 18, cy - 6), (cx + 18, cy + 3), (255, 255, 255), -1)
-            cv2.rectangle(canvas, (cx - 18, cy - 6), (cx + 18, cy + 3), self.fg_color, 2)
-            cv2.circle(canvas, (cx, cy), 4, self.fg_color, -1)
+            lid_h = max(3, int(6 * scale))
+            lower_h = max(2, int(3 * scale))
+            cv2.rectangle(canvas, (cx - half_w, cy - lid_h), (cx + half_w, cy + lower_h), (255, 255, 255), -1)
+            cv2.rectangle(canvas, (cx - half_w, cy - lid_h), (cx + half_w, cy + lower_h), self.fg_color, 2)
+            cv2.circle(canvas, (cx, cy), max(2, pupil_r - 1), self.fg_color, -1)
             return
 
-        cv2.circle(canvas, (cx, cy), 14, (255, 255, 255), -1)
-        cv2.circle(canvas, (cx, cy), 14, self.fg_color, 2)
-        cv2.circle(canvas, (cx, cy), 5, self.fg_color, -1)
+        cv2.ellipse(canvas, (cx, cy), (half_w, half_h), 0, 0, 360, (255, 255, 255), -1)
+        cv2.ellipse(canvas, (cx, cy), (half_w, half_h), 0, 0, 360, self.fg_color, 2)
+        cv2.circle(canvas, (cx, cy), pupil_r, self.fg_color, -1)
+        if emotion == EmotionState.HAPPY:
+            lower_lid_y = cy + max(1, half_h // 3)
+            cv2.ellipse(
+                canvas,
+                (cx, lower_lid_y),
+                (half_w + 1, max(2, half_h - 3)),
+                0,
+                0,
+                180,
+                self.bg_color,
+                -1,
+            )
+            cv2.ellipse(
+                canvas,
+                (cx, lower_lid_y),
+                (half_w, max(2, half_h // 3)),
+                0,
+                0,
+                180,
+                self.fg_color,
+                2,
+            )
 
     def _draw_brow(self, canvas: np.ndarray, center: tuple[int, int], state: BState, side: str):
         cx, cy = center
@@ -117,6 +158,7 @@ class SquareGenerator:
         )
 
         turn_dx, turn_dy = self._turn_offset(state.turn, step_x=24, step_y=18)
+        left_eye_scale, right_eye_scale = self._eye_scale(state.turn)
 
         left_eye = (cx - 50 + turn_dx * 2 // 3, cy - 40 + turn_dy * 2 // 3)
         right_eye = (cx + 50 + turn_dx * 2 // 3, cy - 40 + turn_dy * 2 // 3)
@@ -124,8 +166,8 @@ class SquareGenerator:
         self._draw_brow(canvas, (left_eye[0], left_eye[1] - 28), state.left_brow, "left")
         self._draw_brow(canvas, (right_eye[0], right_eye[1] - 28), state.right_brow, "right")
 
-        self._draw_eye(canvas, left_eye, state.left_eye)
-        self._draw_eye(canvas, right_eye, state.right_eye)
+        self._draw_eye(canvas, left_eye, state.left_eye, left_eye_scale, state.emotion)
+        self._draw_eye(canvas, right_eye, state.right_eye, right_eye_scale, state.emotion)
 
         nose_center = (cx + turn_dx, cy + turn_dy)
         cv2.circle(canvas, nose_center, 5, self.fg_color, -1)

@@ -17,7 +17,11 @@ from .app_controls import (
 
 try:
     from PySide6.QtCore import Qt as _Qt
-    from PySide6.QtGui import QImage as _QImage, QPixmap as _QPixmap
+    from PySide6.QtGui import (
+        QImage as _QImage,
+        QIntValidator as _QIntValidator,
+        QPixmap as _QPixmap,
+    )
     from PySide6.QtWidgets import (
         QApplication as _QApplication,
         QCheckBox as _QCheckBox,
@@ -26,6 +30,7 @@ try:
         QGroupBox as _QGroupBox,
         QHBoxLayout as _QHBoxLayout,
         QLabel as _QLabel,
+        QLineEdit as _QLineEdit,
         QPushButton as _QPushButton,
         QSlider as _QSlider,
         QTabWidget as _QTabWidget,
@@ -35,6 +40,7 @@ try:
 
     Qt: Any = _Qt
     QImage: Any = _QImage
+    QIntValidator: Any = _QIntValidator
     QPixmap: Any = _QPixmap
     QApplication: Any = _QApplication
     QCheckBox: Any = _QCheckBox
@@ -43,6 +49,7 @@ try:
     QGroupBox: Any = _QGroupBox
     QHBoxLayout: Any = _QHBoxLayout
     QLabel: Any = _QLabel
+    QLineEdit: Any = _QLineEdit
     QPushButton: Any = _QPushButton
     QSlider: Any = _QSlider
     QTabWidget: Any = _QTabWidget
@@ -52,6 +59,7 @@ try:
 except ImportError:
     Qt = None
     QImage = None
+    QIntValidator = None
     QPixmap = None
     QApplication = None
     QCheckBox = None
@@ -60,6 +68,7 @@ except ImportError:
     QGroupBox = None
     QHBoxLayout = None
     QLabel = None
+    QLineEdit = None
     QPushButton = None
     QSlider = None
     QTabWidget = None
@@ -78,6 +87,28 @@ class _QtControlWindow(QWidget):  # type: ignore[misc]
         super().closeEvent(event)
 
 
+class _UndoLineEdit(QLineEdit):  # type: ignore[misc]
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        modifiers = event.modifiers()
+        key = event.key()
+
+        if modifiers & Qt.ControlModifier:
+            if key == Qt.Key_Z and modifiers & Qt.ShiftModifier:
+                self.redo()
+                event.accept()
+                return
+            if key == Qt.Key_Z:
+                self.undo()
+                event.accept()
+                return
+            if key == Qt.Key_Y:
+                self.redo()
+                event.accept()
+                return
+
+        super().keyPressEvent(event)
+
+
 class QtLayoutControls:
     uses_opencv_window = False
 
@@ -91,6 +122,8 @@ class QtLayoutControls:
         self._window: _QtControlWindow | None = None
         self._tabs: Any | None = None
         self._value_labels: dict[str, Any] = {}
+        self._value_inputs: dict[str, Any] = {}
+        self._sliders: dict[str, Any] = {}
         self._footer_label: Any | None = None
         self._points_toggle: Any | None = None
         self._tracking_toggle: Any | None = None
@@ -99,6 +132,16 @@ class QtLayoutControls:
         self._character_label: Any | None = None
         self._points_label: Any | None = None
         self._points_group: Any | None = None
+
+    @staticmethod
+    def _sync_input_text(input_widget: Any, value: int) -> None:
+        if input_widget is None:
+            return
+        value_text = str(value)
+        if input_widget.hasFocus():
+            return
+        if input_widget.text() != value_text:
+            input_widget.setText(value_text)
 
     @staticmethod
     def load_settings(path: Path) -> dict[str, LayoutValue]:
@@ -116,17 +159,43 @@ class QtLayoutControls:
         _default, low, high = TRACKBARS[key]
         slider.setRange(low, high)
         slider.setValue(initial_value)
+        self._sliders[key] = slider
 
         value_label = QLabel(str(initial_value))
         value_label.setMinimumWidth(48)
         self._value_labels[key] = value_label
 
+        value_input = _UndoLineEdit(str(initial_value))
+        value_input.setMinimumWidth(60)
+        value_input.setMaximumWidth(72)
+        value_input.setAlignment(Qt.AlignRight)
+        value_input.setValidator(QIntValidator(low, high, value_input))
+        self._value_inputs[key] = value_input
+
         def on_change(value: int, *, key_name: str = key) -> None:
             self._values[key_name] = value
             self._value_labels[key_name].setText(str(value))
+            input_widget = self._value_inputs.get(key_name)
+            self._sync_input_text(input_widget, value)
             self._refresh_footer()
 
         slider.valueChanged.connect(on_change)
+
+        def apply_input(*_args: object, key_name: str = key, min_value: int = low, max_value: int = high) -> None:
+            input_widget = self._value_inputs.get(key_name)
+            slider_widget = self._sliders.get(key_name)
+            if input_widget is None or slider_widget is None:
+                return
+            try:
+                value = int(input_widget.text())
+            except ValueError:
+                value = int(self._values.get(key_name, initial_value))
+            value = max(min_value, min(max_value, value))
+            input_widget.setText(str(value))
+            slider_widget.setValue(value)
+
+        value_input.editingFinished.connect(apply_input)
+        value_input.returnPressed.connect(apply_input)
 
         row = QWidget()
         layout = QHBoxLayout(row)
@@ -134,6 +203,7 @@ class QtLayoutControls:
         layout.setSpacing(8)
         layout.addWidget(slider, stretch=1)
         layout.addWidget(value_label)
+        layout.addWidget(value_input)
         return row
 
     def _build_tab(self, page_idx: int) -> Any:
@@ -279,6 +349,12 @@ class QtLayoutControls:
 
     def draw_overlay(self, current_layout: dict[str, LayoutValue]):
         self._values.update(current_layout)
+        for key, slider in self._sliders.items():
+            value = int(self._values.get(key, TRACKBARS[key][0]))
+            if slider.value() != value:
+                slider.setValue(value)
+            input_widget = self._value_inputs.get(key)
+            self._sync_input_text(input_widget, value)
         self._refresh_footer()
         return None
 
