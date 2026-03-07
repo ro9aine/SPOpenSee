@@ -284,15 +284,10 @@ class CharacterGenerator:
             return shaped
 
         x_coords = np.linspace(-1.0, 1.0, w, dtype=np.float32)
-        cutoff = h * (0.90 - 0.10 * (1.0 - np.square(x_coords)))
+        cutoff = h * (0.92 - 0.08 * (1.0 - np.square(x_coords)))
         y_coords = np.arange(h, dtype=np.float32)[:, None]
-        mask = (y_coords <= cutoff[None, :]).astype(np.uint8) * 255
-        mask = cast(
-            np.ndarray,
-            cv2.GaussianBlur(mask, (0, 0), sigmaX=max(0.8, w / 22.0), sigmaY=max(0.8, h / 18.0)),
-        )
-        alpha = shaped[:, :, 3].astype(np.float32) * (mask.astype(np.float32) / 255.0)
-        shaped[:, :, 3] = alpha.astype(np.uint8)
+        mask = (y_coords <= cutoff[None, :]).astype(np.uint8)
+        shaped[:, :, 3] = shaped[:, :, 3] * mask
         return shaped
 
     def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
@@ -822,9 +817,6 @@ class CharacterGenerator:
 
             left_pupil = self._resized(pupil, max(2, int(pupil.shape[1] * left_eye_scale)))
             right_pupil = self._resized(pupil, max(2, int(pupil.shape[1] * right_eye_scale)))
-            if state.emotion == EmotionState.HAPPY:
-                left_pupil = self._apply_smile_eye_shape(left_pupil)
-                right_pupil = self._apply_smile_eye_shape(right_pupil)
             self._overlay_rgba(
                 head_layer,
                 left_pupil,
