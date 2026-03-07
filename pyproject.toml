@@ -24,7 +24,25 @@ mediapipe = "0.10.14"
 
 
 [tool.poetry.group.dev.dependencies]
+flake8 = "^7.3.0"
 mypy = "^1.19.1"
+pre-commit = "^4.3.0"
+pytest = "^8.4.2"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["main.py", "cutoutcam"]
+ignore_missing_imports = true
+warn_unused_configs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["opensee.*"]
+ignore_errors = true
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

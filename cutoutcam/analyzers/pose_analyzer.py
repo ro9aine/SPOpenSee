@@ -1,24 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from ..state import FaceState
 
-try:
-    import cv2
-    import mediapipe as mp
-    _POSE_IMPORT_ERROR = None
-except ImportError:
-    cv2 = None
-    mp = None
-    _POSE_IMPORT_ERROR = "Failed to import cv2 or mediapipe."
+cv2: Any = None
+mp: Any = None
+mp_pose_module: Any = None
 
 try:
-    from mediapipe.python.solutions import pose as mp_pose_module
+    import cv2 as _cv2
+    import mediapipe as _mp
+    _POSE_IMPORT_ERROR = None
 except ImportError:
-    mp_pose_module = None
+    _POSE_IMPORT_ERROR = "Failed to import cv2 or mediapipe."
+else:
+    cv2 = _cv2
+    mp = _mp
+
+try:
+    from mediapipe.python.solutions import pose as _mp_pose_module
+except ImportError:
     if _POSE_IMPORT_ERROR is None and mp is not None:
         _POSE_IMPORT_ERROR = "mediapipe is present, but mediapipe.python.solutions.pose is unavailable."
+else:
+    mp_pose_module = _mp_pose_module
 
 
 class PoseAnalyzer:
@@ -29,8 +36,8 @@ class PoseAnalyzer:
         visibility_threshold: float = 0.45,
     ):
         self.available = mp is not None and cv2 is not None
-        self._pose = None
-        self._mp_pose = None
+        self._pose: Any | None = None
+        self._mp_pose: Any | None = None
         self._visibility_threshold = visibility_threshold
         self._last_points: dict[str, tuple[float, float, float]] = {}
         self.unavailable_reason: str | None = _POSE_IMPORT_ERROR
@@ -63,7 +70,7 @@ class PoseAnalyzer:
             self._pose.close()
             self._pose = None
 
-    def draw_debug(self, frame_bgr) -> None:
+    def draw_debug(self, frame_bgr: Any) -> None:
         if not self._last_points:
             return
 
@@ -104,7 +111,7 @@ class PoseAnalyzer:
                 cv2.LINE_AA,
             )
 
-    def _landmark_xy(self, landmarks, landmark_id) -> tuple[float, float, float]:
+    def _landmark_xy(self, landmarks: Any, landmark_id: Any) -> tuple[float, float, float]:
         point = landmarks[landmark_id]
         return (
             float(min(1.0, max(0.0, point.x))),
@@ -131,7 +138,7 @@ class PoseAnalyzer:
             return mid_x, mid_y
         return elbow_x, elbow_y
 
-    def enrich_state(self, frame_bgr, state: FaceState) -> FaceState:
+    def enrich_state(self, frame_bgr: Any, state: FaceState) -> FaceState:
         if not self.available or self._pose is None:
             return state
 
@@ -142,6 +149,8 @@ class PoseAnalyzer:
             return replace(state, left_arm_visible=False, right_arm_visible=False)
 
         lm = results.pose_landmarks.landmark
+        if self._mp_pose is None:
+            return state
         pl = self._mp_pose.PoseLandmark
 
         left_shoulder_x, left_shoulder_y, left_shoulder_v = self._landmark_xy(lm, pl.LEFT_SHOULDER)

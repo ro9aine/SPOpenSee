@@ -6,7 +6,7 @@ import cv2
 
 from opensee.tracker import Tracker
 from cutoutcam.analyzers import FaceAnalyzer, PoseAnalyzer
-from cutoutcam.app_controls import CONTROL_WINDOW, LayoutControls
+from cutoutcam.app_controls import CONTROL_WINDOW, LayoutControls, LayoutValue
 from cutoutcam.app_runtime import open_camera, open_virtual_camera, smooth_face_state, to_rgb
 from cutoutcam.audio_input import MicSpeechInput
 from cutoutcam.generators import CharacterGenerator
@@ -22,11 +22,11 @@ SHOW_LANDMARK_LABELS = False
 POSE_EVERY_N_FRAMES = 2
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--disable-hands", action="store_true", help="Disable pose-based arm and hand tracking.")
     parser.add_argument("--disable-mic", action="store_true", help="Disable microphone speech input handling.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
@@ -45,11 +45,12 @@ def main() -> None:
     layout_path = Path("configs") / "characters" / f"{char_id}_layout.json"
     character = CharacterGenerator(char_id, width=CHARACTER_WIDTH, height=CHARACTER_HEIGHT)
 
-    current_layout = controls.load_settings(layout_path)
+    current_layout: dict[str, LayoutValue] = controls.load_settings(layout_path)
     control_limits = controls.create_window(current_layout)
     character.set_layout(current_layout)
-    if isinstance(current_layout.get("bg_image_path"), str):
-        character.set_background_image(current_layout.get("bg_image_path"))
+    bg_image_path = current_layout.get("bg_image_path")
+    if isinstance(bg_image_path, str):
+        character.set_background_image(bg_image_path)
 
     state_history: deque[FaceState] = deque(maxlen=SMOOTHING_WINDOW)
     virtual_cam = open_virtual_camera(character.width, character.height, fps=30)

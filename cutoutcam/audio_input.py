@@ -1,11 +1,16 @@
 from threading import Lock
+from typing import Any
 
 import numpy as np
 
+sd: Any = None
+
 try:
-    import sounddevice as sd
+    import sounddevice as _sd
 except ImportError:
-    sd = None
+    pass
+else:
+    sd = _sd
 
 
 class MicSpeechInput:
@@ -13,7 +18,7 @@ class MicSpeechInput:
         self.sample_rate = sample_rate
         self.block_ms = block_ms
         self._lock = Lock()
-        self._stream = None
+        self._stream: Any | None = None
         self._last_rms = 0.0
         self._smooth_rms = 0.0
         self._hangover = 0
@@ -31,6 +36,8 @@ class MicSpeechInput:
     def start(self) -> bool:
         if not self._enabled:
             print("sounddevice is not installed. Microphone mouth control is disabled.")
+            return False
+        if sd is None:
             return False
 
         blocksize = max(1, int(self.sample_rate * self.block_ms / 1000))
@@ -84,4 +91,3 @@ class MicSpeechInput:
                 pass
         self._stream = None
         self._running = False
-
