@@ -410,3 +410,6 @@ class LayoutControls:
             cv2.destroyWindow(CONTROL_WINDOW)
         except cv2.error:
             pass
+
+    def update_previews(self, _points_frame, _character_frame) -> None:
+        return

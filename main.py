@@ -1,6 +1,7 @@
 import argparse
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 import cv2
 
@@ -40,7 +41,7 @@ def main() -> None:
     tracker = Tracker(480, 640, silent=True)
     analyzer = FaceAnalyzer()
     pose_analyzer = PoseAnalyzer() if not args.disable_hands else None
-    controls = LayoutControls()
+    controls: Any = LayoutControls()
     if args.ui == "qt":
         try:
             from cutoutcam.qt_controls import QT_AVAILABLE, QtLayoutControls
@@ -127,18 +128,19 @@ def main() -> None:
             speech_energy=speech_energy,
         )
 
-        cv2.imshow(WEBCAM_WINDOW, frame)
-        cv2.imshow(CHARACTER_WINDOW, character_frame)
         if controls.uses_opencv_window:
+            cv2.imshow(WEBCAM_WINDOW, frame)
+            cv2.imshow(CHARACTER_WINDOW, character_frame)
             cv2.imshow(CONTROL_WINDOW, controls.draw_overlay(current_layout))
         else:
             controls.draw_overlay(current_layout)
+            controls.update_previews(frame, character_frame)
 
         if virtual_cam is not None:
             virtual_cam.send(to_rgb(character_frame))
             virtual_cam.sleep_until_next_frame()
 
-        key = cv2.waitKey(1) & 0xFF
+        key = cv2.waitKey(1) & 0xFF if controls.uses_opencv_window else 255
         if controls.pop_action("save"):
             controls.save_settings(layout_path, current_layout)
             print(f"Layout saved to {layout_path}")

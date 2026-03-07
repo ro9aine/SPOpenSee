@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
-
-import numpy as np
+from typing import Any, Callable
 
 from .app_controls import (
     ACTION_BUTTONS,
@@ -18,33 +16,55 @@ from .app_controls import (
 )
 
 try:
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt as _Qt
+    from PySide6.QtGui import QImage as _QImage, QPixmap as _QPixmap
     from PySide6.QtWidgets import (
-        QApplication,
-        QFileDialog,
-        QFormLayout,
-        QHBoxLayout,
-        QLabel,
-        QPushButton,
-        QSlider,
-        QTabWidget,
-        QVBoxLayout,
-        QWidget,
+        QApplication as _QApplication,
+        QCheckBox as _QCheckBox,
+        QFileDialog as _QFileDialog,
+        QFormLayout as _QFormLayout,
+        QGroupBox as _QGroupBox,
+        QHBoxLayout as _QHBoxLayout,
+        QLabel as _QLabel,
+        QPushButton as _QPushButton,
+        QSlider as _QSlider,
+        QTabWidget as _QTabWidget,
+        QVBoxLayout as _QVBoxLayout,
+        QWidget as _QWidget,
     )
 
+    Qt: Any = _Qt
+    QImage: Any = _QImage
+    QPixmap: Any = _QPixmap
+    QApplication: Any = _QApplication
+    QCheckBox: Any = _QCheckBox
+    QFileDialog: Any = _QFileDialog
+    QFormLayout: Any = _QFormLayout
+    QGroupBox: Any = _QGroupBox
+    QHBoxLayout: Any = _QHBoxLayout
+    QLabel: Any = _QLabel
+    QPushButton: Any = _QPushButton
+    QSlider: Any = _QSlider
+    QTabWidget: Any = _QTabWidget
+    QVBoxLayout: Any = _QVBoxLayout
+    QWidget: Any = _QWidget
     QT_AVAILABLE = True
 except ImportError:
+    Qt = None
+    QImage = None
+    QPixmap = None
     QApplication = None
+    QCheckBox = None
     QFileDialog = None
+    QFormLayout = None
+    QGroupBox = None
+    QHBoxLayout = None
     QLabel = None
     QPushButton = None
     QSlider = None
     QTabWidget = None
     QVBoxLayout = None
-    QHBoxLayout = None
-    QFormLayout = None
     QWidget = object
-    Qt = None
     QT_AVAILABLE = False
 
 
@@ -69,8 +89,13 @@ class QtLayoutControls:
         self._action_events = {key: False for key in ACTION_BUTTONS}
         self._values: dict[str, LayoutValue] = {}
         self._window: _QtControlWindow | None = None
-        self._tabs: QTabWidget | None = None
-        self._value_labels: dict[str, QLabel] = {}
+        self._tabs: Any | None = None
+        self._value_labels: dict[str, Any] = {}
+        self._footer_label: Any | None = None
+        self._points_toggle: Any | None = None
+        self._character_label: Any | None = None
+        self._points_label: Any | None = None
+        self._points_group: Any | None = None
 
     @staticmethod
     def load_settings(path: Path) -> dict[str, LayoutValue]:
@@ -83,79 +108,124 @@ class QtLayoutControls:
     def _set_action(self, name: str) -> None:
         self._action_events[name] = True
 
-    def _build_slider_row(self, key: str, initial_value: int):
+    def _build_slider_row(self, key: str, initial_value: int) -> Any:
         slider = QSlider(Qt.Horizontal)
         _default, low, high = TRACKBARS[key]
         slider.setRange(low, high)
         slider.setValue(initial_value)
 
         value_label = QLabel(str(initial_value))
-        value_label.setMinimumWidth(52)
+        value_label.setMinimumWidth(48)
         self._value_labels[key] = value_label
 
         def on_change(value: int, *, key_name: str = key) -> None:
             self._values[key_name] = value
             self._value_labels[key_name].setText(str(value))
+            self._refresh_footer()
 
         slider.valueChanged.connect(on_change)
 
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         layout.addWidget(slider, stretch=1)
         layout.addWidget(value_label)
         return row
 
-    def _build_tab(self, page_idx: int) -> QWidget:
+    def _build_tab(self, page_idx: int) -> Any:
         tab = QWidget()
         form = QFormLayout(tab)
-        form.setContentsMargins(12, 12, 12, 12)
+        form.setContentsMargins(10, 10, 10, 10)
         form.setSpacing(8)
         for key in TRACKBAR_PAGES[page_idx]:
             value = int(self._values.get(key, TRACKBARS[key][0]))
             form.addRow(TRACKBAR_LABELS.get(key, key.replace("_", " ")), self._build_slider_row(key, value))
         return tab
 
+    def _build_preview_panel(self, title: str) -> tuple[Any, Any]:
+        group = QGroupBox(title)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(10, 10, 10, 10)
+        preview = QLabel("No frame yet")
+        preview.setMinimumSize(480, 270)
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setStyleSheet("background:#20252b; color:#d7dee9; border:1px solid #3a4048;")
+        layout.addWidget(preview)
+        return group, preview
+
     def create_window(self, initial_values: dict[str, LayoutValue]) -> dict[str, tuple[int, int]]:
         self._values = initial_values.copy()
         self._window = _QtControlWindow(lambda: self._set_action("quit"))
         self._window.setWindowTitle(CONTROL_WINDOW)
-        self._window.resize(520, 760)
+        self._window.resize(1440, 900)
 
-        root = QVBoxLayout(self._window)
+        root = QHBoxLayout(self._window)
         root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(10)
+        root.setSpacing(12)
+
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+        left_panel.setMinimumWidth(420)
+        left_panel.setMaximumWidth(520)
 
         self._tabs = QTabWidget()
         for page_idx, _page in enumerate(TRACKBAR_PAGES):
             self._tabs.addTab(self._build_tab(page_idx), PAGE_LABELS.get(page_idx, f"Page {page_idx + 1}"))
-        root.addWidget(self._tabs, stretch=1)
+        self._tabs.currentChanged.connect(lambda _index: self._refresh_footer())
+        left_layout.addWidget(self._tabs, stretch=1)
 
-        button_rows = (
-            ("page_prev", "page_next", "save", "quit"),
+        buttons_grid = (
+            ("page_prev", "page_next"),
+            ("save", "quit"),
             ("pick_bg", "clear_bg"),
         )
-        for row_keys in button_rows:
+        for row_keys in buttons_grid:
             row = QHBoxLayout()
             row.setSpacing(8)
             for key in row_keys:
                 button = QPushButton(ACTION_BUTTONS[key][2])
-                button.setMinimumHeight(36)
-                if key in ("page_prev", "page_next"):
-                    if key == "page_prev":
-                        button.clicked.connect(lambda _checked=False: self._goto_relative_page(-1))
-                    else:
-                        button.clicked.connect(lambda _checked=False: self._goto_relative_page(1))
+                button.setMinimumHeight(34)
+                if key == "page_prev":
+                    button.clicked.connect(lambda _checked=False: self._goto_relative_page(-1))
+                elif key == "page_next":
+                    button.clicked.connect(lambda _checked=False: self._goto_relative_page(1))
                 else:
                     button.clicked.connect(lambda _checked=False, name=key: self._set_action(name))
                 row.addWidget(button)
-            root.addLayout(row)
+            left_layout.addLayout(row)
 
-        footer = QLabel(self._footer_text())
-        footer.setObjectName("footerLabel")
-        root.addWidget(footer)
+        self._points_toggle = QCheckBox("Show points section")
+        self._points_toggle.setChecked(True)
+        self._points_toggle.toggled.connect(self._toggle_points_section)
+        left_layout.addWidget(self._points_toggle)
+
+        self._footer_label = QLabel("")
+        left_layout.addWidget(self._footer_label)
+        self._refresh_footer()
+
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+
+        character_group, self._character_label = self._build_preview_panel("Character Output")
+        points_group, self._points_label = self._build_preview_panel("Points Preview")
+        self._points_group = points_group
+        right_layout.addWidget(character_group, stretch=1)
+        right_layout.addWidget(points_group, stretch=1)
+
+        root.addWidget(left_panel, stretch=1)
+        root.addWidget(right_panel, stretch=2)
+
         self._window.show()
         return {key: (low, high) for key, (_default, low, high) in TRACKBARS.items()}
+
+    def _toggle_points_section(self, checked: bool) -> None:
+        if self._points_group is not None:
+            self._points_group.setVisible(bool(checked))
 
     def _goto_relative_page(self, delta: int) -> None:
         if self._tabs is None:
@@ -171,16 +241,43 @@ class QtLayoutControls:
         mode = int(self._values.get("bg_mode", 0))
         return f"Background: {BG_MODE_LABELS.get(mode, f'Mode {mode}')}    {page_name}"
 
+    def _refresh_footer(self) -> None:
+        if self._footer_label is not None:
+            self._footer_label.setText(self._footer_text())
+
+    @staticmethod
+    def _to_pixmap(frame_bgr) -> Any:
+        rgb = frame_bgr[:, :, ::-1].copy()
+        height, width, channels = rgb.shape
+        bytes_per_line = channels * width
+        image = QImage(rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
+        return QPixmap.fromImage(image.copy())
+
     def read_values(self, _limits: dict[str, tuple[int, int]]) -> dict[str, int]:
         return {key: int(value) for key, value in self._values.items() if key in TRACKBARS}
 
-    def draw_overlay(self, current_layout: dict[str, LayoutValue]) -> np.ndarray:
+    def draw_overlay(self, current_layout: dict[str, LayoutValue]):
         self._values.update(current_layout)
-        if self._window is not None:
-            footer = self._window.findChild(QLabel, "footerLabel")
-            if footer is not None:
-                footer.setText(self._footer_text())
-        return np.zeros((1, 1, 3), dtype=np.uint8)
+        self._refresh_footer()
+        return None
+
+    def update_previews(self, points_frame, character_frame) -> None:
+        if self._character_label is not None:
+            self._character_label.setPixmap(
+                self._to_pixmap(character_frame).scaled(
+                    self._character_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
+        if self._points_label is not None and self._points_toggle is not None and self._points_toggle.isChecked():
+            self._points_label.setPixmap(
+                self._to_pixmap(points_frame).scaled(
+                    self._points_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
 
     def pop_action(self, name: str) -> bool:
         value = self._action_events.get(name, False)
