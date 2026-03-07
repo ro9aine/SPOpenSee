@@ -58,18 +58,28 @@ class CharacterGenerator:
             "head_scale": 62,
             "head_x": 0,
             "head_y": 0,
-            "head_45_scale": 100,
-            "head_45_x": 0,
-            "head_45_y": 0,
+            "head_left_scale": 100,
+            "head_left_x": 0,
+            "head_left_y": 0,
+            "head_right_scale": 100,
+            "head_right_x": 0,
+            "head_right_y": 0,
             "hair_scale": 100,
             "hair_x": 0,
             "hair_y": 0,
-            "hair_45_scale": 100,
-            "hair_45_x": 0,
-            "hair_45_y": 0,
+            "hair_left_scale": 100,
+            "hair_left_x": 0,
+            "hair_left_y": 0,
+            "hair_right_scale": 100,
+            "hair_right_x": 0,
+            "hair_right_y": 0,
             "eyes_scale": 55,
             "eyes_x": 0,
             "eyes_y": 0,
+            "eyes_left_x": 0,
+            "eyes_left_y": 0,
+            "eyes_right_x": 0,
+            "eyes_right_y": 0,
             "pupil_scale": 4,
             "pupil_x": 0,
             "pupil_y": 0,
@@ -81,9 +91,17 @@ class CharacterGenerator:
             "brow_scale": 100,
             "brow_x": 0,
             "brow_y": 0,
+            "brow_left_x": 0,
+            "brow_left_y": 0,
+            "brow_right_x": 0,
+            "brow_right_y": 0,
             "mouth_scale": 100,
             "mouth_x": 0,
             "mouth_y": 0,
+            "mouth_left_x": 0,
+            "mouth_left_y": 0,
+            "mouth_right_x": 0,
+            "mouth_right_y": 0,
             "bg_mode": 0,
             "bg_r1": 245,
             "bg_g1": 245,
@@ -240,6 +258,10 @@ class CharacterGenerator:
             return cv2.flip(self._head_45, 1), cv2.flip(self._haircut_45, 1), True
 
         return self._head_45, self._haircut_45, True
+
+    @staticmethod
+    def _is_right_side_turn(turn: FState) -> bool:
+        return turn in {FState.RIGHT, FState.UP_RIGHT, FState.DOWN_RIGHT}
 
     def _fit_background_image(self, image: np.ndarray, fill_color: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
@@ -609,13 +631,26 @@ class CharacterGenerator:
         head_offset_y = self.layout["head_y"]
         hair_offset_x = self.layout["hair_x"]
         hair_offset_y = self.layout["hair_y"]
+        eyes_offset_x = self.layout["eyes_x"]
+        eyes_offset_y = self.layout["eyes_y"]
+        brow_offset_x = self.layout["brow_x"]
+        brow_offset_y = self.layout["brow_y"]
+        mouth_offset_x = self.layout["mouth_x"]
+        mouth_offset_y = self.layout["mouth_y"]
         if use_side_head:
-            head_scale = int(head_scale * self.layout["head_45_scale"] / 100)
-            hair_scale = int(hair_scale * self.layout["hair_45_scale"] / 100)
-            head_offset_x += self.layout["head_45_x"]
-            head_offset_y += self.layout["head_45_y"]
-            hair_offset_x += self.layout["hair_45_x"]
-            hair_offset_y += self.layout["hair_45_y"]
+            side_prefix = "right" if self._is_right_side_turn(state.turn) else "left"
+            head_scale = int(head_scale * self.layout[f"head_{side_prefix}_scale"] / 100)
+            hair_scale = int(hair_scale * self.layout[f"hair_{side_prefix}_scale"] / 100)
+            head_offset_x += self.layout[f"head_{side_prefix}_x"]
+            head_offset_y += self.layout[f"head_{side_prefix}_y"]
+            hair_offset_x += self.layout[f"hair_{side_prefix}_x"]
+            hair_offset_y += self.layout[f"hair_{side_prefix}_y"]
+            eyes_offset_x += self.layout[f"eyes_{side_prefix}_x"]
+            eyes_offset_y += self.layout[f"eyes_{side_prefix}_y"]
+            brow_offset_x += self.layout[f"brow_{side_prefix}_x"]
+            brow_offset_y += self.layout[f"brow_{side_prefix}_y"]
+            mouth_offset_x += self.layout[f"mouth_{side_prefix}_x"]
+            mouth_offset_y += self.layout[f"mouth_{side_prefix}_y"]
 
         head = self._resized(head_part, max(40, int(self.width * head_scale / 100)))
         hair = self._resized(hair_part, max(10, int(head.shape[1] * hair_scale / 100)))
@@ -679,19 +714,19 @@ class CharacterGenerator:
         head_y = int(self.height * 0.12) + head_offset_y
         self._overlay_rgba(head_layer, head, head_x, head_y)
 
-        eyes_x = head_x + int(head.shape[1] * 0.23) + self.layout["eyes_x"]
-        eyes_y = head_y + int(head.shape[0] * 0.38) + self.layout["eyes_y"]
+        eyes_x = head_x + int(head.shape[1] * 0.23) + eyes_offset_x
+        eyes_y = head_y + int(head.shape[0] * 0.38) + eyes_offset_y
         closed_eyes_x = eyes_x + (eyes_white.shape[1] - closed_eyes.shape[1]) // 2 + self.layout["closed_eyes_x"]
         closed_eyes_y = eyes_y + (eyes_white.shape[0] - closed_eyes.shape[0]) // 2 + self.layout["closed_eyes_y"]
         unified_brow_state = self._merged_brow_state(state.left_brow, state.right_brow)
-        brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + self.layout["brow_y"]
-        left_brow_x = eyes_x + int(eyes_white.shape[1] * 0.02) + self.layout["brow_x"]
+        brow_y_base = eyes_y - int(brow.shape[0] * 1.10) + brow_offset_y
+        left_brow_x = eyes_x + int(eyes_white.shape[1] * 0.02) + brow_offset_x
         right_brow_x = (
             eyes_x
             + eyes_white.shape[1]
             - right_brow.shape[1]
             - int(eyes_white.shape[1] * 0.02)
-            - self.layout["brow_x"]
+            - brow_offset_x
         )
         self._overlay_rgba(
             head_layer,
@@ -756,8 +791,8 @@ class CharacterGenerator:
                 mouth_open,
             )
 
-        mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + self.layout["mouth_x"] + turn_dx
-        mouth_y = head_y + int(head.shape[0] * 0.73) + self.layout["mouth_y"] + turn_dy
+        mouth_x = head_x + (head.shape[1] - mouth.shape[1]) // 2 + mouth_offset_x + turn_dx
+        mouth_y = head_y + int(head.shape[0] * 0.73) + mouth_offset_y + turn_dy
         self._overlay_rgba(head_layer, mouth, mouth_x, mouth_y)
 
         hair_x = head_x + (head.shape[1] - hair.shape[1]) // 2 + hair_offset_x
