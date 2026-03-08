@@ -70,10 +70,10 @@ TRACKBARS = {
     "mouth_scale": (100, 20, 250),
     "mouth_x": (0, -120, 120),
     "mouth_y": (0, -120, 120),
-    "mouth_left_x": (0, -120, 120),
-    "mouth_left_y": (0, -120, 120),
-    "mouth_right_x": (0, -120, 120),
-    "mouth_right_y": (0, -120, 120),
+    "mouth_side_left_x": (0, -120, 120),
+    "mouth_side_left_y": (0, -120, 120),
+    "mouth_side_right_x": (0, -120, 120),
+    "mouth_side_right_y": (0, -120, 120),
     "speech_active": (0, 0, 1),
     "speech_energy": (0, 0, 100),
     "mic_enabled": (1, 0, 1),
@@ -152,10 +152,10 @@ TRACKBAR_LABELS = {
     "mouth_scale": "mouth scale",
     "mouth_x": "mouth x",
     "mouth_y": "mouth y",
-    "mouth_left_x": "left mouth x",
-    "mouth_left_y": "left mouth y",
-    "mouth_right_x": "right mouth x",
-    "mouth_right_y": "right mouth y",
+    "mouth_side_left_x": "left side mouth x",
+    "mouth_side_left_y": "left side mouth y",
+    "mouth_side_right_x": "right side mouth x",
+    "mouth_side_right_y": "right side mouth y",
     "speech_active": "speech active",
     "speech_energy": "speech energy",
     "mic_enabled": "mic enabled",
@@ -241,10 +241,10 @@ TRACKBAR_PAGES = [
         "mouth_scale",
         "mouth_x",
         "mouth_y",
-        "mouth_left_x",
-        "mouth_left_y",
-        "mouth_right_x",
-        "mouth_right_y",
+        "mouth_side_left_x",
+        "mouth_side_left_y",
+        "mouth_side_right_x",
+        "mouth_side_right_y",
         "speech_active",
         "speech_energy",
         "mic_enabled",
@@ -294,6 +294,13 @@ PAGE_LABELS = {
     5: "Page 6: Mask",
 }
 
+LEGACY_LAYOUT_KEYS = {
+    "mouth_left_x": "mouth_side_left_x",
+    "mouth_left_y": "mouth_side_left_y",
+    "mouth_right_x": "mouth_side_right_x",
+    "mouth_right_y": "mouth_side_right_y",
+}
+
 
 class LayoutControls:
     def __init__(self):
@@ -321,6 +328,9 @@ class LayoutControls:
         bg_image_path = data.get("bg_image_path")
         if isinstance(bg_image_path, str) and bg_image_path:
             result["bg_image_path"] = bg_image_path
+        for legacy_key, current_key in LEGACY_LAYOUT_KEYS.items():
+            if current_key not in data and legacy_key in data:
+                data[current_key] = data[legacy_key]
 
         for key, (_default, low, high) in TRACKBARS.items():
             value = data.get(key, result[key])

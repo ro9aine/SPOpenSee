@@ -91,3 +91,30 @@ def smooth_face_state(history: deque[FaceState]) -> FaceState:
     smoothed.right_hand_x = average_attr(history, "right_hand_x")
     smoothed.right_hand_y = average_attr(history, "right_hand_y")
     return smoothed
+
+
+def merge_face_with_pose(face_state: FaceState, pose_state: FaceState) -> FaceState:
+    merged = FaceState()
+    merged.turn = face_state.turn
+    merged.left_eye = face_state.left_eye
+    merged.right_eye = face_state.right_eye
+    merged.mouth = face_state.mouth
+    merged.emotion = face_state.emotion
+    merged.left_brow = face_state.left_brow
+    merged.right_brow = face_state.right_brow
+    merged.rotation = face_state.rotation
+    merged.left_arm_visible = pose_state.left_arm_visible
+    merged.right_arm_visible = pose_state.right_arm_visible
+    merged.left_shoulder_x = pose_state.left_shoulder_x
+    merged.left_shoulder_y = pose_state.left_shoulder_y
+    merged.right_shoulder_x = pose_state.right_shoulder_x
+    merged.right_shoulder_y = pose_state.right_shoulder_y
+    merged.left_elbow_x = pose_state.left_elbow_x
+    merged.left_elbow_y = pose_state.left_elbow_y
+    merged.right_elbow_x = pose_state.right_elbow_x
+    merged.right_elbow_y = pose_state.right_elbow_y
+    merged.left_hand_x = pose_state.left_hand_x
+    merged.left_hand_y = pose_state.left_hand_y
+    merged.right_hand_x = pose_state.right_hand_x
+    merged.right_hand_y = pose_state.right_hand_y
+    return merged
